@@ -140,7 +140,7 @@ export class CharacterView {
   }
 }
 
-export const EMOTES = ['CAO!', 'AJMO!', 'GG', 'HAHA'];
+export const EMOTES = ['A U KURAC!', 'GG', 'KOSOVO JE SRBIJA!', 'HAHA', '👍👍', 'STUDENTI POBEDJUJU!'];
 function drawEmote(ctx: CanvasRenderingContext2D, e: number, x: number, bottom: number, t: number) {
   const pop = Math.min(1, (1.8 - t) * 8);
   ctx.save();
