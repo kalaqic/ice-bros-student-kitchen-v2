@@ -1,0 +1,7 @@
+node_modules/
+client/dist/
+server/dist/
+legacy/
+tools/__pycache__/
+.DS_Store
+*.log

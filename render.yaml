@@ -1,0 +1,9 @@
+# One-click deploy on Render (https://render.com) - a single Node web service
+services:
+  - type: web
+    name: ice-bros
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
