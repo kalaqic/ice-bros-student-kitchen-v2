@@ -13,6 +13,23 @@ import { Room } from './Room.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DIST = path.join(ROOT, 'client', 'dist');
+
+/** music dropped into assets/audio is picked up on every server start (no rebuild needed) */
+function syncAudio() {
+  try {
+    const src = path.join(ROOT, 'assets', 'audio'), dst = path.join(DIST, 'assets', 'audio');
+    if (!fs.existsSync(DIST)) return;
+    fs.mkdirSync(dst, { recursive: true });
+    const files = fs.existsSync(src) ? fs.readdirSync(src).filter((f) => /\.(mp3|ogg|wav|m4a)$/i.test(f)) : [];
+    for (const f of files) {
+      const a = path.join(src, f), b = path.join(dst, f);
+      if (!fs.existsSync(b) || fs.statSync(b).size !== fs.statSync(a).size) fs.copyFileSync(a, b);
+    }
+    fs.writeFileSync(path.join(dst, 'index.json'), JSON.stringify(files));
+    if (files.length) console.log('music:', files.join(', '));
+  } catch (e) { console.warn('audio sync failed', e); }
+}
+syncAudio();
 const PORT = Number(process.env.PORT || 2567);
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -90,7 +107,7 @@ wss.on('connection', (ws) => {
         const role = isRole(m.role) ? m.role : 'david';
         room = new Room(makeCode());
         rooms.set(room.code, room);
-        me = room.addPlayer(ws, role);
+        me = room.addPlayer(ws, role, m.progress);
         log(`room ${room.code} created by ${role}`);
         return;
       }
@@ -100,6 +117,7 @@ wss.on('connection', (ws) => {
         const r = rooms.get(code);
         if (!r) return sendRaw(ws, { t: 'error', msg: 'SOBA NE POSTOJI' });
         // a reopened tab can reclaim its old (disconnected) slot with a remembered token
+        r.mergeProgress(m.progress);
         if (Array.isArray(m.tokens)) {
           for (const tk of m.tokens.slice(0, 8)) {
             const p = typeof tk === 'string' ? r.resume(ws, tk, true) : null;
@@ -108,7 +126,7 @@ wss.on('connection', (ws) => {
         }
         if (r.full) return sendRaw(ws, { t: 'error', msg: 'SOBA JE PUNA (MAX 2)' });
         if (r.phase !== 'lobby') return sendRaw(ws, { t: 'error', msg: 'IGRA JE VEC POCELA' });
-        room = r; me = r.addPlayer(ws, isRole(m.role) ? m.role : 'nemanja');
+        room = r; me = r.addPlayer(ws, isRole(m.role) ? m.role : 'nemanja', m.progress);
         log(`room ${r.code}: ${me.role} joined`);
         return;
       }
@@ -126,6 +144,7 @@ wss.on('connection', (ws) => {
     switch (m.t) {
       case 'input': room.onInput(me, Number(m.seq), Number(m.dx), Number(m.dy)); break;
       case 'act': room.onAct(me, String(m.a)); break;
+      case 'answer': room.onAnswer(me, Number(m.i)); break;
       case 'emote': room.onEmote(me, Number(m.e)); break;
       case 'ready': room.onReady(me, !!m.v); break;
       case 'toLobby': if (room.phase !== 'lobby') room.toLobby(); break;

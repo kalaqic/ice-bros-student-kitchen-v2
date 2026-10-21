@@ -15,6 +15,12 @@ fs.mkdirSync(DIST, { recursive: true });
 const BUILD = String(Date.now());
 fs.writeFileSync(path.join(DIST, 'index.html'), fs.readFileSync(path.join(ROOT, 'client', 'index.html'), 'utf8').replace(/__BUILD__/g, BUILD));
 fs.cpSync(path.join(ROOT, 'assets', 'runtime'), path.join(DIST, 'assets'), { recursive: true });
+// music / sfx: copy assets/audio and write an index so the client knows which tracks exist
+const AUDIO = path.join(ROOT, 'assets', 'audio');
+fs.mkdirSync(path.join(DIST, 'assets', 'audio'), { recursive: true });
+const audioFiles = fs.existsSync(AUDIO) ? fs.readdirSync(AUDIO).filter((f) => /\.(mp3|ogg|wav|m4a)$/i.test(f)) : [];
+for (const f of audioFiles) fs.copyFileSync(path.join(AUDIO, f), path.join(DIST, 'assets', 'audio', f));
+fs.writeFileSync(path.join(DIST, 'assets', 'audio', 'index.json'), JSON.stringify(audioFiles));
 
 const opts = {
   entryPoints: [path.join(ROOT, 'client', 'src', 'main.ts')],

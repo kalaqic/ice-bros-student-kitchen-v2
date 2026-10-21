@@ -63,18 +63,69 @@ export function drawChar(ctx: CanvasRenderingContext2D, r: Role, anim: CharAnim,
   ctx.restore();
 }
 
+/** ------------------------------------------------------------------ stage sheets
+ * Frames cut by tools/extract_stages.py: assets/stage/<key>_<i>.png listed in manifest.json.
+ * Gameplay asks for logical keys; a missing key returns null and callers draw a labelled placeholder,
+ * so new art can be dropped in (npm run assets) without touching code. */
+export const STAGE_MANIFEST: Record<string, { n: number; w: number; h: number; ext?: string }> = {};
+const stageImg = new Map<string, HTMLImageElement>();
+export function sp(key: string, i = 0): HTMLImageElement | null {
+  const m = STAGE_MANIFEST[key];
+  if (!m) return null;
+  return stageImg.get(`${key}_${((i % m.n) + m.n) % m.n}`) ?? null;
+}
+export const spN = (key: string) => STAGE_MANIFEST[key]?.n ?? 0;
+export const hasSp = (key: string) => !!STAGE_MANIFEST[key];
+
+/** obvious temporary art for a missing asset key (never silently blank) */
+export function placeholder(ctx: CanvasRenderingContext2D, key: string, x: number, y: number, w: number, h: number) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,0,200,0.25)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#ff40d0'; ctx.setLineDash([4, 3]); ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+  ctx.fillStyle = '#ffffff'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+  ctx.fillText(key.slice(0, 14), x + w / 2, y + h / 2 + 3);
+  ctx.restore();
+}
+
+/** draw an image scaled to fit (w,h) with its bottom-centre at (cx, bottom) */
+export function drawFit(ctx: CanvasRenderingContext2D, im: HTMLImageElement | null, key: string, cx: number, bottom: number, w: number, h: number, flip = false, rot = 0) {
+  if (!im) { placeholder(ctx, key, cx - w / 2, bottom - h, w, h); return; }
+  const s = Math.min(w / im.width, h / im.height);
+  const dw = im.width * s, dh = im.height * s;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.translate(cx, bottom - dh / 2);
+  if (rot) ctx.rotate(rot);
+  if (flip) ctx.scale(-1, 1);
+  ctx.drawImage(im, -dw / 2, -dh / 2, dw, dh);
+  ctx.restore();
+}
+
 /** build id injected by esbuild - busts the browser cache whenever the game is rebuilt */
 declare const __BUILD__: string;
 const V = typeof __BUILD__ !== 'undefined' ? __BUILD__ : String(Date.now());
 
 export async function loadAll(onProgress: (f: number) => void): Promise<void> {
   Object.assign(CHAR, await (await fetch('assets/chars/frames.json?v=' + V, { cache: 'no-store' })).json());
+  try { Object.assign(STAGE_MANIFEST, await (await fetch('assets/stage/manifest.json?v=' + V, { cache: 'no-store' })).json()); } catch { /* no stage art yet */ }
   const entries = Object.entries(IMAGES) as [ImageKey, string][];
+  const stageEntries: [string, string][] = [];
+  for (const [k, m] of Object.entries(STAGE_MANIFEST)) for (let i = 0; i < m.n; i++) stageEntries.push([`${k}_${i}`, `stage/${k}_${i}.${(m as { ext?: string }).ext ?? 'png'}`]);
+  const total = entries.length + stageEntries.length;
   let done = 0;
-  await Promise.all(entries.map(([k, src]) => new Promise<void>((res, rej) => {
-    const im = new Image();
-    im.onload = () => { img[k] = im; onProgress(++done / entries.length); res(); };
-    im.onerror = () => rej(new Error('failed to load ' + src));
-    im.src = 'assets/' + src + '?v=' + V;
-  })));
+  await Promise.all([
+    ...entries.map(([k, src]) => new Promise<void>((res, rej) => {
+      const im = new Image();
+      im.onload = () => { img[k] = im; onProgress(++done / total); res(); };
+      im.onerror = () => rej(new Error('failed to load ' + src));
+      im.src = 'assets/' + src + '?v=' + V;
+    })),
+    // stage art is optional: a missing frame just falls back to a placeholder
+    ...stageEntries.map(([k, src]) => new Promise<void>((res) => {
+      const im = new Image();
+      im.onload = () => { stageImg.set(k, im); onProgress(++done / total); res(); };
+      im.onerror = () => { onProgress(++done / total); res(); };
+      im.src = 'assets/' + src + '?v=' + V;
+    })),
+  ]);
 }

@@ -20,6 +20,7 @@ export class Predictor {
   moving = false;
   canMove = true;
   slowed = false;
+  debt = false;
   initialised = false;
 
   constructor(private net: Net) {}
@@ -40,7 +41,7 @@ export class Predictor {
       this.moving = this.canMove && (dx !== 0 || dy !== 0);
       if (dx !== 0 || dy !== 0) {
         const inp = { seq: ++globalSeq, dx, dy };
-        stepPlayer(this.pos, inp, this.canMove, this.slowed, solid);
+        stepPlayer(this.pos, inp, this.canMove, this.slowed, solid, this.debt);
         this.pending.push(inp);
         if (this.pending.length > 60) this.pending.shift();
         this.net.send({ t: 'input', seq: inp.seq, dx, dy });
@@ -54,14 +55,15 @@ export class Predictor {
   }
 
   reconcile(ps: PlayerSnap, solid: SolidFn) {
-    this.canMove = !ps.ko && !ps.dr;
+    this.canMove = !ps.ko && !ps.dr && !(ps.sn > 0) && !(ps.qz >= 0);
     this.slowed = !!ps.sl;
+    this.debt = !!ps.db;
     if (!this.initialised) { this.reset(ps.x, ps.y, ps.f); return; }
     const before = { x: this.pos.x, y: this.pos.y };
     this.pending = this.pending.filter((p) => p.seq > ps.ack);
     const base = { x: ps.x, y: ps.y, facing: this.pos.facing };
     if (!this.pending.length) base.facing = ps.f;
-    for (const inp of this.pending) stepPlayer(base, inp, this.canMove, this.slowed, solid);
+    for (const inp of this.pending) stepPlayer(base, inp, this.canMove, this.slowed, solid, this.debt);
     this.pos = base;
     const ex = before.x - base.x, ey = before.y - base.y;
     if (Math.hypot(ex, ey) > 120) { this.err = { x: 0, y: 0 }; this.prev = { x: base.x, y: base.y }; }

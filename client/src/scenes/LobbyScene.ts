@@ -2,14 +2,16 @@ import { text } from '../engine/font.ts';
 import { Snow } from '../engine/fx.ts';
 import type { Scene } from '../engine/Game.ts';
 import { C, panel, pixRect } from '../engine/ui.ts';
-import { CharacterView, EMOTES } from '../game/Character.ts';
+import { CharacterView, EMOTES, EMOTE_KEYS } from '../game/Character.ts';
 import { Interp, Predictor } from '../game/Predictor.ts';
 import type { App } from '../main.ts';
 import { LOBBY_SIGN, lobbySolid } from '../../../shared/lobby.ts';
 import type { PlayerSnap, ServerMsg } from '../../../shared/protocol.ts';
 import { roleName, type Role } from '../../../shared/types.ts';
 import { drawLobbyBg } from './common.ts';
-import { LEVEL_ORDER, levelIndex } from '../../../shared/levels/index.ts';
+import { LEVEL_ORDER, levelIndex, levelUnlocked } from '../../../shared/levels/index.ts';
+import { stageDef } from '../../../shared/stages.ts';
+import { bindings, keyLabel } from '../engine/bindings.ts';
 
 /** Playable waiting lobby on top of assets/snowy_lobby.png. */
 export class LobbyScene implements Scene {
@@ -27,6 +29,7 @@ export class LobbyScene implements Scene {
 
   enter() {
     this.off = this.app.session.net.on((m) => this.onMsg(m));
+    this.app.game.audio.music('lobby');
   }
   exit() { this.off?.(); }
 
@@ -69,9 +72,13 @@ export class LobbyScene implements Scene {
     const { game, session } = this.app;
     const inp = game.input;
     if (!session.me) return;
-    this.alpha = this.pred.update(dt, inp.axis(), lobbySolid);
-    for (let i = 0; i < 4; i++) if (inp.wasPressed('Digit' + (i + 1))) session.net.send({ t: 'emote', e: i });
-    if (inp.wasPressed('KeyR', 'Enter')) this.toggleReady();
+    const blocked = game.blocked;
+    this.alpha = this.pred.update(dt, blocked ? { dx: 0, dy: 0 } : inp.axis(), lobbySolid);
+    if (!blocked) {
+      EMOTE_KEYS.forEach((k, i) => { if (inp.wasPressed(k)) session.net.send({ t: 'emote', e: i }); });
+      if (inp.wasPressed('KeyR', 'Enter')) this.toggleReady();
+      if (inp.actionPressed('pause')) this.app.settings();
+    }
     if (this.copied > 0) this.copied -= dt;
 
     for (const p of this.last) {
@@ -132,6 +139,8 @@ export class LobbyScene implements Scene {
       this.copied = 1.6;
     }
     if (ui.button(ctx, 'NAPUSTI SOBU', 1000, 76, 264, 40, { color: 'navy', size: 2 })) { session.leave(); this.app.toMenu(); }
+    if (ui.button(ctx, 'PODESAVANJA', 1000, 126, 128, 40, { color: 'navy', size: 1 })) this.app.settings();
+    if (ui.button(ctx, 'VESTINE', 1136, 126, 128, 40, { color: 'navy', size: 1 })) this.app.skillsScreen();
 
     // ---- status banner over the fence
     const both = session.players.length === 2 && session.players.every((p) => p.connected);
@@ -148,18 +157,22 @@ export class LobbyScene implements Scene {
     const li = Math.max(0, levelIndex(session.levelId));
     const lv = LEVEL_ORDER[li];
     panel(ctx, 440, 616, 400, 92, 'navy');
-    text(ctx, `NIVO ${lv.number}/${LEVEL_ORDER.length}`, 640, 632, { size: 1, color: lv.boss ? '#ff8a7a' : C.gold }, 'center');
+    const stg = stageDef(lv.stage);
+    text(ctx, `STAGE ${stg.n} ${stg.name}  -  NIVO ${lv.number}/${LEVEL_ORDER.length}`, 640, 632, { size: 1, color: lv.boss ? '#ff8a7a' : stg.color }, 'center');
     text(ctx, lv.name, 640, 650, { size: lv.name.length > 11 ? 2 : 3, color: C.white, outline: C.navyD }, 'center');
     text(ctx, lv.boss ? 'BOSS!' : lv.subtitle, 640, 680, { size: 1, color: lv.boss ? '#ff8a7a' : C.ice }, 'center');
     if (ui.button(ctx, '<', 452, 640, 44, 44, { color: 'ice', size: 3, disabled: li <= 0 })) session.net.send({ t: 'pickLevel', id: LEVEL_ORDER[li - 1].id });
-    if (ui.button(ctx, '>', 784, 640, 44, 44, { color: 'ice', size: 3, disabled: li >= session.unlocked || li + 1 >= LEVEL_ORDER.length })) session.net.send({ t: 'pickLevel', id: LEVEL_ORDER[li + 1].id });
-    if (li + 1 < LEVEL_ORDER.length && li >= session.unlocked) text(ctx, 'PREDJI OVAJ ZA SLEDECI', 640, 694, { size: 1, color: 'rgba(223,243,255,0.6)' }, 'center');
+    const nextOk = li + 1 < LEVEL_ORDER.length && levelUnlocked(LEVEL_ORDER[li + 1].id, session.completed);
+    if (ui.button(ctx, '>', 784, 640, 44, 44, { color: 'ice', size: 3, disabled: !nextOk })) session.net.send({ t: 'pickLevel', id: LEVEL_ORDER[li + 1].id });
+    if (li + 1 < LEVEL_ORDER.length && !nextOk) text(ctx, 'PREDJI OVAJ ZA SLEDECI', 640, 694, { size: 1, color: 'rgba(223,243,255,0.6)' }, 'center');
+    else if (session.completed.includes(lv.id)) text(ctx, 'PREDJENO', 640, 694, { size: 1, color: C.green }, 'center');
 
     // ---- bottom: controls + READY
     panel(ctx, 14, 626, 404, 82, 'dark');
-    text(ctx, 'WASD  HODAJ PO LOBIJU', 34, 644, { size: 2, color: C.iceL });
-    text(ctx, '1-4   EMOTE: ' + EMOTES.join(' '), 34, 668, { size: 1, color: C.ice });
-    text(ctx, 'R     READY   M  ZVUK', 34, 686, { size: 1, color: C.ice });
+    const k = (a: Parameters<typeof bindings.code>[0]) => keyLabel(bindings.code(a));
+    text(ctx, `${k('up')}${k('left')}${k('down')}${k('right')}  HODAJ PO LOBIJU`, 34, 644, { size: 2, color: C.iceL });
+    text(ctx, '1-6   EMOTE: ' + EMOTES.slice(0, 3).join(' '), 34, 668, { size: 1, color: C.ice });
+    text(ctx, `R  READY   ${keyLabel(bindings.code('pause'))}  PODESAVANJA`, 34, 686, { size: 1, color: C.ice });
     const ready = this.myReady();
     const pulse = !ready && both ? 1 + Math.sin(this.t * 6) * 0.03 : 1;
     const bw2 = 250 * pulse, bh = 70 * pulse;

@@ -7,6 +7,7 @@ import type { App } from '../main.ts';
 import type { Role } from '../../../shared/types.ts';
 import { drawImageFit, drawLobbyBg } from './common.ts';
 import { Net } from '../net/Net.ts';
+import { Session } from '../game/Session.ts';
 
 const TRAITS: Record<Role, [string, string]> = {
   david: ['FITNES I DISCIPLINA', 'KOD + PROTEIN'],
@@ -34,7 +35,10 @@ export class MenuScene implements Scene {
     } catch { /* ignore */ }
   }
 
-  enter() { if (this.app.session.error) { this.status = this.app.session.error; this.mode = this.mode === 'busy' ? 'main' : this.mode; } }
+  enter() {
+    this.app.game.audio.music('menu');
+    if (this.app.session.error) { this.status = this.app.session.error; this.mode = this.mode === 'busy' ? 'main' : this.mode; }
+  }
 
   private pickRole(r: Role) {
     this.app.session.wantedRole = r;
@@ -44,7 +48,7 @@ export class MenuScene implements Scene {
   private async create() {
     const s = this.app.session;
     this.mode = 'busy'; this.status = 'PRAVIM SOBU...'; s.error = '';
-    try { await s.net.connect(); s.net.send({ t: 'create', role: s.wantedRole }); }
+    try { await s.net.connect(); s.net.send({ t: 'create', role: s.wantedRole, progress: Session.loadProgress() }); }
     catch { this.mode = 'main'; this.status = 'SERVER NIJE DOSTUPAN'; }
   }
 
@@ -52,7 +56,7 @@ export class MenuScene implements Scene {
     const s = this.app.session;
     if (this.code.length < 4) { this.status = 'UNESI KOD SOBE (4 ZNAKA)'; return; }
     this.mode = 'busy'; this.status = 'ULAZIM U SOBU ' + this.code + '...'; s.error = '';
-    try { await s.net.connect(); s.net.send({ t: 'join', code: this.code, role: s.wantedRole, tokens: Net.tokensFor(this.code) }); }
+    try { await s.net.connect(); s.net.send({ t: 'join', code: this.code, role: s.wantedRole, tokens: Net.tokensFor(this.code), progress: Session.loadProgress() }); }
     catch { this.mode = 'join'; this.status = 'SERVER NIJE DOSTUPAN'; }
   }
 
@@ -61,6 +65,7 @@ export class MenuScene implements Scene {
     this.snow.update(dt);
     const inp = this.app.game.input;
     const s = this.app.session;
+    if (this.app.game.blocked) return;
     if (s.error && this.mode === 'busy') { this.mode = this.code ? 'join' : 'main'; this.status = s.error; s.error = ''; }
     if (this.mode === 'main') {
       if (inp.wasPressed('ArrowLeft', 'KeyA', 'Digit1')) this.pickRole('david');
@@ -152,6 +157,8 @@ export class MenuScene implements Scene {
     }
     if (this.status) text(ctx, this.status, 640, 684, { size: 2, color: this.status.includes('NE') || this.status.includes('PUN') ? '#ffb3a8' : C.iceL, outline: C.navyD }, 'center');
     text(ctx, 'PLAY TOGETHER IN YOUR BROWSER', 1268, 706, { size: 1, color: 'rgba(223,243,255,0.7)' }, 'right');
+    if (ui.button(ctx, 'PODESAVANJA', 14, 14, 200, 44, { color: 'navy', size: 2 })) this.app.settings();
+    if (ui.button(ctx, 'VESTINE', 14, 66, 200, 44, { color: 'navy', size: 2 })) this.app.skillsScreen();
     text(ctx, 'M = ZVUK ' + (game.audio.muted ? 'OFF' : 'ON'), 12, 706, { size: 1, color: 'rgba(223,243,255,0.7)' });
   }
 }

@@ -1,4 +1,5 @@
-import { CHAR, charImage, type CharAnim } from '../engine/assets.ts';
+import { CHAR, charImage, sp, spN, type CharAnim } from '../engine/assets.ts';
+import type { TaskAnim } from '../../../shared/tasks.ts';
 import { drawStar } from '../engine/fx.ts';
 import { text } from '../engine/font.ts';
 import { C, bubble, pixRect, ring } from '../engine/ui.ts';
@@ -10,7 +11,23 @@ const FEET = 10; // px below the hitbox centre where the sprite's feet touch the
 
 export interface CharState {
   moving: boolean; drinking: boolean; ko: boolean; win: boolean; invuln: boolean; slowed: boolean; revive: number;
+  stunned: boolean; debt: boolean; locked: boolean;
 }
+
+/**
+ * Task animation sets per character (stage asset prefixes: <prefix>_prep / _loop / _done).
+ * Add e.g. 'task_studying_david' to the stage manifest and list it here to give a task type its own art;
+ * until then a character falls back to its default task animation.
+ */
+const TASK_ANIM: Record<Role, Partial<Record<TaskAnim, string>> & { default: string }> = {
+  david: { default: 'task_coding', coding: 'task_coding', studying: 'task_studying_david' },
+  nemanja: { default: 'task_gaming', gaming: 'task_gaming', studying: 'task_studying_nemanja' },
+};
+export function taskAnimPrefix(role: Role, anim: TaskAnim): string {
+  const want = TASK_ANIM[role][anim];
+  return want && spN(want + '_loop') ? want : TASK_ANIM[role].default;
+}
+const TASK_SCALE = 0.8;
 
 /** Visual for David/Nemanja: picks animation frames from the extracted sprite strips. */
 export class CharacterView {
@@ -19,7 +36,17 @@ export class CharacterView {
   facing: Dir = 1;
   flip = false;
   t = 0;
-  st: CharState = { moving: false, drinking: false, ko: false, win: false, invuln: false, slowed: false, revive: 0 };
+  st: CharState = { moving: false, drinking: false, ko: false, win: false, invuln: false, slowed: false, revive: 0, stunned: false, debt: false, locked: false };
+  /** reusable task animation state: prep (sit down) -> loop while progress fills -> done -> idle */
+  private task: { anim: TaskAnim; phase: 'prep' | 'loop' | 'done'; t: number; flip: boolean } | null = null;
+  setTask(anim: TaskAnim | '', faceLeft: boolean) {
+    if (anim && (!this.task || this.task.phase === 'done')) this.task = { anim, phase: 'prep', t: 0, flip: faceLeft };
+    else if (anim && this.task) this.task.flip = faceLeft;
+    else if (!anim && this.task && this.task.phase !== 'done') this.task = null;
+  }
+  /** play the success animation (called when the station completes) */
+  finishTask() { if (this.task) { this.task.phase = 'done'; this.task.t = 0; } }
+  get working() { return !!this.task; }
   private drinkT = 0;
   private say: { lines: string[]; t: number; color: string } | null = null;
   private emote: { e: number; t: number } | null = null;
@@ -51,6 +78,12 @@ export class CharacterView {
   update(dt: number): boolean {
     this.t += dt;
     if (this.action && (this.action.t += dt) >= this.action.dur) this.action = null;
+    if (this.task) {
+      this.task.t += dt;
+      if (this.task.phase === 'prep' && this.task.t > 0.55) { this.task.phase = 'loop'; this.task.t = 0; }
+      if (this.task.phase === 'done' && this.task.t > 0.75) this.task = null;
+      if (this.st.ko || this.st.moving) this.task = null;
+    }
     if (this.st.drinking) this.drinkT += dt; else this.drinkT = 0;
     if (this.st.ko) this.koT += dt; else this.koT = 0;
     if (this.say && (this.say.t -= dt) <= 0) this.say = null;
@@ -89,6 +122,7 @@ export class CharacterView {
     ctx.fillStyle = 'rgba(20,40,80,0.28)';
     ctx.beginPath(); ctx.ellipse(x, y + FEET - 1, (this.st.ko ? 34 : 19) * s / CHAR_SCALE, 6, 0, 0, Math.PI * 2); ctx.fill();
 
+    if (this.task && !this.st.ko && this.drawTask(ctx, x, y)) { this.drawOverhead(ctx, x, y, opts); return; }
     const fi = this.frame();
     ctx.save();
     if (this.st.invuln && !this.st.ko && Math.floor(this.t * 14) % 2 === 0) ctx.globalAlpha = 0.35;
@@ -104,7 +138,51 @@ export class CharacterView {
     ctx.restore();
     ctx.imageSmoothingEnabled = false;
 
+    this.drawOverhead(ctx, x, y, opts);
+  }
+
+  /** task frames (laptop coding / headphones gaming); returns false if the art is missing */
+  private drawTask(ctx: CanvasRenderingContext2D, x: number, y: number): boolean {
+    const t = this.task!;
+    const prefix = taskAnimPrefix(this.role, t.anim);
+    const key = `${prefix}_${t.phase}`;
+    const n = spN(key);
+    if (!n) return false;
+    const fi = t.phase === 'loop' ? Math.floor(this.t * 8) % n : Math.min(n - 1, Math.floor((t.t / (t.phase === 'prep' ? 0.55 : 0.75)) * n));
+    const im = sp(key, fi);
+    if (!im) return false;
+    const sc = TASK_SCALE * this.scale / CHAR_SCALE;
+    ctx.save();
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.translate(x, y + FEET);
+    if (t.flip) ctx.scale(-1, 1);
+    ctx.drawImage(im, -im.width * sc / 2, -im.height * sc + 2, im.width * sc, im.height * sc);
+    ctx.restore();
+    // little screen symbols / button presses while the loop runs
+    if (t.phase === 'loop') {
+      const syms = prefix.includes('gaming') ? ['!', '*', '+', '!'] : ['</>', '{ }', '01', '=>', ';'];
+      for (let k = 0; k < 2; k++) {
+        const ph = (this.t * 0.9 + k * 0.5) % 1;
+        ctx.globalAlpha = 1 - ph;
+        text(ctx, syms[Math.floor(this.t * 0.9 + k * 0.5) % syms.length], x + (t.flip ? -1 : 1) * (14 + k * 10), y - 30 - ph * 26, { size: 1, color: prefix.includes('gaming') ? '#ff6a5a' : '#7fe08a', outline: '#0b1428' }, 'center');
+      }
+      ctx.globalAlpha = 1;
+    }
+    return true;
+  }
+
+  private drawOverhead(ctx: CanvasRenderingContext2D, x: number, y: number, opts: { name?: boolean; you?: boolean; ready?: boolean }) {
+    const s = this.scale;
     const headY = y + FEET - 76 * s / CHAR_SCALE + 8;
+    if (this.st.stunned && !this.st.ko) {
+      ctx.fillStyle = C.gold;
+      for (let i = 0; i < 3; i++) { const a = this.t * 5 + (i * Math.PI * 2) / 3; drawStar(ctx, x + Math.cos(a) * 16, headY - 2 + Math.sin(a) * 5, 5, this.t * 6); }
+    }
+    if (this.st.debt && !this.st.ko) text(ctx, '$', x + 18 + Math.sin(this.t * 4) * 2, headY + 4, { size: 2, color: '#7fe08a', outline: '#0b1428' }, 'center');
+    if (this.st.locked && !this.st.ko) {
+      ctx.fillStyle = '#b05cff'; ctx.fillRect(x - 24, headY + 6, 10, 8);
+      ctx.strokeStyle = '#b05cff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x - 19, headY + 6, 4, Math.PI, 0); ctx.stroke();
+    }
     if (this.st.ko && this.koT > 0.75) {
       text(ctx, 'KO', x, y - 44, { size: 2, color: C.red, outline: C.navyD }, 'center');
     }
@@ -141,6 +219,7 @@ export class CharacterView {
 }
 
 export const EMOTES = ['A U KURAC!', 'GG', 'KOSOVO JE SRBIJA!', 'HAHA', '👍👍', 'STUDENTI POBEDJUJU!'];
+export const EMOTE_KEYS = EMOTES.map((_, i) => 'Digit' + (i + 1));
 function drawEmote(ctx: CanvasRenderingContext2D, e: number, x: number, bottom: number, t: number) {
   const pop = Math.min(1, (1.8 - t) * 8);
   ctx.save();

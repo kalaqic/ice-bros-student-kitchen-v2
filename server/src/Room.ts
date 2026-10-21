@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
 import { WebSocket } from 'ws';
 import { LOBBY_SPAWNS, lobbySolid } from '../../shared/lobby.ts';
-import { FIRST_LEVEL, LEVELS, LEVEL_ORDER, levelIndex } from '../../shared/levels/index.ts';
+import { FIRST_LEVEL, LEVELS, LEVEL_ORDER, completedStages, isStageFinal, levelIndex, levelUnlocked } from '../../shared/levels/index.ts';
+import { skillsFor, type SkillId } from '../../shared/skills.ts';
+import { stageDef } from '../../shared/stages.ts';
 import { stepPlayer } from '../../shared/physics.ts';
 import type { GameEvent, PlayerSnap, ServerMsg, Snapshot } from '../../shared/protocol.ts';
 import { type Phase, type Role, otherRole, roleName } from '../../shared/types.ts';
@@ -14,8 +16,9 @@ const LEVEL_RECONNECT_MS = 45_000;
 export class Room {
   phase: Phase = 'lobby';
   levelId = FIRST_LEVEL;
-  /** highest level index this room may pick (progress unlocks the next one) */
-  unlocked = process.env.ICEBROS_UNLOCK_ALL === '1' ? LEVEL_ORDER.length - 1 : 0;
+  /** completed level ids (shared co-op progress: union of both players' saved progress + this session) */
+  completed: string[] = process.env.ICEBROS_UNLOCK_ALL === '1' ? LEVEL_ORDER.map((l) => l.id) : [];
+  get skills(): SkillId[] { return skillsFor(completedStages(this.completed)); }
   players: Player[] = [];
   sim: LevelSim | null = null;
   tickN = 0;
@@ -26,7 +29,14 @@ export class Room {
 
   get full() { return this.players.length >= 2; }
 
-  addPlayer(ws: WebSocket, wanted: Role): Player {
+  /** merge saved progress from a joining browser (only known level ids) */
+  mergeProgress(list: unknown) {
+    if (!Array.isArray(list)) return;
+    for (const id of list.slice(0, 64)) if (typeof id === 'string' && LEVELS[id] && !this.completed.includes(id)) this.completed.push(id);
+  }
+
+  addPlayer(ws: WebSocket, wanted: Role, progress?: unknown): Player {
+    this.mergeProgress(progress);
     const taken = this.players.map((p) => p.role);
     const role = taken.includes(wanted) ? otherRole(wanted) : wanted;
     const p = new Player(crypto.randomUUID(), crypto.randomBytes(12).toString('hex'), role);
@@ -84,11 +94,17 @@ export class Room {
     if (a === 'ice') this.sim.actIce(p);
     else if (a === 'coffee') this.sim.actCoffee(p);
     else if (a === 'camera') this.sim.actCamera(p);
+    else if (a === 'interact') this.sim.actInteract(p);
+  }
+
+  onAnswer(p: Player, i: number) {
+    if (this.phase !== 'level' || !this.sim || this.paused()) return;
+    this.sim.answer(p, i);
   }
 
   onEmote(p: Player, e: number) {
     const now = Date.now();
-    if (now < p.emoteReadyAt || !Number.isInteger(e) || e < 0 || e > 3) return;
+    if (now < p.emoteReadyAt || !Number.isInteger(e) || e < 0 || e > 5) return;
     p.emoteReadyAt = now + 700;
     const ev: GameEvent = { k: 'emote', by: p.id, e };
     if (this.phase === 'level' && this.sim) this.sim.events.push(ev); else this.lobbyEvents.push(ev);
@@ -96,23 +112,32 @@ export class Room {
 
   /** Dev cheats for testing (ICEBROS_DEBUG=1 only). */
   onDebug(p: Player, cmd: string) {
-    if (cmd === 'unlockAll') { this.unlocked = LEVEL_ORDER.length - 1; this.broadcastRoom(); return; }
+    if (cmd === 'unlockAll') { this.completed = LEVEL_ORDER.map((l) => l.id); this.broadcastRoom(); return; }
+    if (cmd === 'resetProgress') { this.completed = []; this.levelId = FIRST_LEVEL; this.broadcastRoom(); return; }
     const sim = this.sim;
     if (!sim || this.phase !== 'level') return;
     if (cmd === 'collectAll') sim.items.forEach((it) => { it.taken = true; });
     if (cmd === 'hurt') { p.invulnUntil = 0; p.hp = Math.max(1, p.hp - 1); }
     if (cmd === 'ko') { p.hp = 0; p.ko = true; p.koUntil = sim.now + 10000; p.reviveMs = 0; sim.events.push({ k: 'ko', by: p.id }); }
     if (cmd === 'gather') { const o = this.players.find((q) => q !== p); if (o) { o.x = p.x + 52; o.y = p.y; } }
-    if (cmd === 'bossLow' && sim.boss) { sim.boss.hp = 2; }
+    if (cmd === 'bossLow' && sim.boss) { sim.boss.hp = 1; }
+    if (cmd === 'killAll') sim.enemies.forEach((e) => { e.state = 2; e.respawnAt = Infinity; });
+    if (cmd === 'nearBoss' && sim.boss) { const t = sim.boss.target(); p.x = t.x; p.y = t.y + 100; p.facing = 3; }
     if (cmd === 'stations') sim.stations.forEach((s) => { s.progress = 0.99; });
+    if (cmd === 'bossKill' && sim.boss) (sim.boss as unknown as { damage(n: number, p?: Player): void }).damage(sim.boss.hp, p);
+    if (cmd === 'toStation') {
+      const st = sim.stations.find((s) => !s.done && (!s.role || s.role === p.role));
+      if (st && sim.level.map[st.ty + 1]?.[st.tx] === '.') { p.x = st.tx * 48 + 24; p.y = (st.ty + 1) * 48 + 24; p.facing = 3; }
+    }
     if (cmd === 'toExit') {
-      this.players.forEach((q, i) => { q.x = (9 + i) * 48 + 24; q.y = 24; });
+      const ex = sim.level.map[0].indexOf('E');
+      this.players.forEach((q, i) => { q.x = (ex + i) * 48 + 24; q.y = 24; });
     }
   }
 
   startLevel() {
     this.phase = 'level';
-    this.sim = new LevelSim(LEVELS[this.levelId], this.players);
+    this.sim = new LevelSim(LEVELS[this.levelId], this.players, this.skills);
     for (const p of this.players) { p.inputs = []; p.lastIvSent = -1; }
     this.broadcast({ t: 'level', levelId: this.levelId, seed: 0 });
     this.broadcastRoom();
@@ -120,7 +145,7 @@ export class Room {
 
   pickLevel(id: string) {
     const i = levelIndex(id);
-    if (this.phase !== 'lobby' || i < 0 || i > this.unlocked) return;
+    if (this.phase !== 'lobby' || i < 0 || !levelUnlocked(id, this.completed)) return;
     this.levelId = id;
     for (const p of this.players) p.ready = false;
     this.broadcastRoom();
@@ -130,7 +155,7 @@ export class Room {
   next() {
     if (this.phase !== 'complete') return;
     const i = levelIndex(this.levelId);
-    if (i + 1 >= LEVEL_ORDER.length) return;
+    if (i + 1 >= LEVEL_ORDER.length || !levelUnlocked(LEVEL_ORDER[i + 1].id, this.completed)) return;
     this.levelId = LEVEL_ORDER[i + 1].id;
     this.startLevel();
   }
@@ -138,6 +163,7 @@ export class Room {
   retry() {
     if (this.phase === 'lobby' || !this.sim) return;
     this.phase = 'level';
+    this.sim.skills = this.skills;
     this.sim.reset();
     this.sim.events.push({ k: 'restart' });
     this.broadcast({ t: 'level', levelId: this.levelId, seed: 0 });
@@ -193,7 +219,13 @@ export class Room {
       const done = this.sim.tick();
       if (done) {
         this.phase = 'complete';
-        this.unlocked = Math.max(this.unlocked, Math.min(LEVEL_ORDER.length - 1, levelIndex(this.levelId) + 1));
+        const before = this.skills;
+        if (!this.completed.includes(this.levelId)) this.completed.push(this.levelId);
+        const gained = this.skills.filter((s) => !before.includes(s));
+        const L = LEVELS[this.levelId];
+        this.sim.stats.unlocked = gained[0] ?? null;
+        this.sim.stats.stageDone = isStageFinal(this.levelId) ? L.stage : null;
+        void stageDef;
         this.broadcast({ t: 'complete', stats: this.sim.stats });
         this.broadcastRoom();
       }
@@ -210,9 +242,11 @@ export class Room {
       const snap: Snapshot = {
         t: 's', tick: this.tickN, p: ps, e: sim ? sim.enemySnaps() : [], ev,
         iv: sim ? sim.iceVersion : 0,
+        pr: sim ? sim.projectiles.map((f) => [f.id, f.kind, Math.round(f.x), Math.round(f.y), Math.round(f.vx), Math.round(f.vy)] as [number, string, number, number, number, number]) : [],
+        hz: sim ? sim.hazards.map((h) => [h.id, h.kind, Math.round(h.x), Math.round(h.y), h.r, Math.max(0, Math.round(h.activeAt - sim.now)), Math.max(0, Math.round(h.until - sim.now))] as [number, string, number, number, number, number, number]) : [],
         taken: sim ? sim.items.flatMap((it, i) => (it.taken ? [i] : [])) : [],
         coffee: sim ? sim.coffee.flatMap((c, i) => (c.taken ? [i] : [])) : [],
-        st: sim ? sim.stations.map((s) => Math.round(s.progress * 100) / 100) : [],
+        st: sim ? sim.stations.map((s) => (s.done ? 1 : Math.floor(s.progress * 100) / 100)) : [],
         gate: sim?.gateOpen ? 1 : 0, exit: sim?.exitOpen ? 1 : 0, paused, time: sim ? Math.round(sim.now) : 0,
       };
       if (sim?.boss) snap.boss = sim.boss.snap();
@@ -226,7 +260,7 @@ export class Room {
   broadcast(msg: ServerMsg) { for (const p of this.players) this.send(p, msg); }
   broadcastRoom() {
     this.broadcast({
-      t: 'room', code: this.code, phase: this.phase, levelId: this.levelId, unlocked: this.unlocked,
+      t: 'room', code: this.code, phase: this.phase, levelId: this.levelId, completed: this.completed, skills: this.skills,
       players: this.players.map((p) => ({ id: p.id, role: p.role, connected: p.connected, ready: p.ready })),
     });
   }
@@ -239,5 +273,6 @@ function lobbySnap(p: Player): PlayerSnap {
   return {
     id: p.id, role: p.role, x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, f: p.facing, m: p.moving ? 1 : 0,
     hp: 3, cof: 0, cam: 0, sl: 0, dr: 0, inv: 0, ko: 0, rv: 0, ack: p.ack, col: 0, c: p.connected ? 1 : 0,
+    sn: 0, db: 0, lk: [], tk: '', ti: -1, qz: -1, qs: 0,
   };
 }

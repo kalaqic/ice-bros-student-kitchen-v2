@@ -1,9 +1,16 @@
 import { Audio } from './audio.ts';
 import { Input } from './input.ts';
 import { UI } from './ui.ts';
+import { bindings } from './bindings.ts';
 
 export const W = 1280;
 export const H = 720;
+
+/** modal panel drawn above the current scene (settings, skills, pause...) */
+export interface Overlay {
+  update(dt: number): void;
+  render(ctx: CanvasRenderingContext2D): void;
+}
 
 export interface Scene {
   enter?(): void;
@@ -20,6 +27,11 @@ export class Game {
   readonly audio = new Audio();
   readonly ui: UI;
   scene: Scene | null = null;
+  overlays: Overlay[] = [];
+  /** gameplay input is ignored while a modal overlay is open */
+  get blocked() { return this.overlays.length > 0; }
+  open(o: Overlay) { this.overlays.push(o); }
+  close(o?: Overlay) { this.overlays = o ? this.overlays.filter((x) => x !== o) : this.overlays.slice(0, -1); }
   private k = 1;
   private last = performance.now();
   time = 0;
@@ -68,8 +80,10 @@ export class Game {
   }
 
   private step(dt: number) {
-    if (this.input.wasPressed('KeyM') && !(document.activeElement instanceof HTMLInputElement)) this.audio.toggleMute();
+    if (this.input.wasPressed('KeyM') && !this.input.capture && !bindings.actionFor('KeyM')) this.audio.toggleMute();
+    const top = this.overlays[this.overlays.length - 1];
     this.scene?.update(dt);
+    top?.update(dt);
     const ctx = this.ctx;
     ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
     ctx.imageSmoothingEnabled = false;
@@ -80,7 +94,14 @@ export class Game {
       ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
     }
     this.ui.begin();
+    // while an overlay is open the scene's buttons must not react to clicks
+    const click = this.input.mouse.clicked;
+    if (top) this.input.mouse.clicked = false;
+    this.ui.enabled = !top;
     this.scene?.render(ctx);
+    this.ui.enabled = true;
+    this.input.mouse.clicked = click;
+    for (const o of this.overlays) o.render(ctx);
     this.ui.end();
     ctx.setTransform(this.k, 0, 0, this.k, 0, 0);
     if (this.fade.dir !== 0) {

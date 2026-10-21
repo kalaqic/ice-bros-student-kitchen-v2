@@ -75,11 +75,13 @@ const BTN: Record<NonNullable<ButtonOpts['color']>, [string, string, string]> = 
 
 export class UI {
   hot: string | null = null;
+  enabled = true;
   constructor(private input: Input, private onClick: () => void) {}
 
   begin() { this.hot = null; }
 
   hit(x: number, y: number, w: number, h: number) {
+    if (!this.enabled) return false;
     const m = this.input.mouse;
     return m.x >= x && m.x <= x + w && m.y >= y && m.y <= y + h;
   }
@@ -87,7 +89,7 @@ export class UI {
   /** Immediate-mode button. Returns true on click this frame. */
   button(ctx: CanvasRenderingContext2D, label: string, x: number, y: number, w: number, h: number, o: ButtonOpts = {}): boolean {
     const [face, depth, ink] = BTN[o.color ?? 'ice'];
-    const over = !o.disabled && this.hit(x, y, w, h);
+    const over = this.enabled && !o.disabled && this.hit(x, y, w, h);
     if (over) this.hot = label;
     const pressed = over && this.input.mouse.down;
     const dy = pressed ? 3 : 0;

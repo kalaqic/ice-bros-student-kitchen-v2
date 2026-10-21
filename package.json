@@ -13,7 +13,7 @@
     "test:net": "tsx tools/net-test.ts",
     "test:playthrough": "tsx tools/playthrough-test.ts",
     "verify": "npm run typecheck && npm test && npm run build",
-    "assets": "python3 tools/extract_sprites.py && python3 tools/extract_sprites_v2.py && python3 tools/extract_boss.py && python3 tools/make_tiles.py",
+    "assets": "python3 tools/extract_sprites.py && python3 tools/extract_sprites_v2.py && python3 tools/extract_boss.py && python3 tools/make_tiles.py && python3 tools/extract_stages.py",
     "start:bundle": "node server/dist/server.mjs"
   },
   "engines": {

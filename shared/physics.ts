@@ -1,4 +1,4 @@
-import { DT, HIT_HH, HIT_HW, PLAYER_SPEED, SLOW_FACTOR, TILE } from './constants.ts';
+import { DEBT_FACTOR, DT, HIT_HH, HIT_HW, PLAYER_SPEED, SLOW_FACTOR, TILE } from './constants.ts';
 import type { Dir } from './types.ts';
 
 /** Returns true when the world point is blocked. */
@@ -63,18 +63,24 @@ function nudge(x: number, y: number, axis: 'x' | 'y', solid: SolidFn): number | 
 export interface MoveInput { dx: number; dy: number }
 
 /** One fixed simulation step of player movement (used by server and client prediction). */
+/** movement speed multiplier from status effects (same on server and client prediction) */
+export function speedMult(slowed: boolean | number, debt: boolean | number): number {
+  return slowed ? SLOW_FACTOR : debt ? DEBT_FACTOR : 1;
+}
+
 export function stepPlayer(
   pos: { x: number; y: number; facing: Dir },
   input: MoveInput,
   canMove: boolean,
   slowed: boolean,
   solid: SolidFn,
+  debt = false,
 ): void {
   let { dx, dy } = input;
   if (dx !== 0 || dy !== 0) pos.facing = facingFrom(dx, dy, pos.facing);
   if (!canMove || (dx === 0 && dy === 0)) return;
   const len = Math.hypot(dx, dy) || 1;
-  const sp = PLAYER_SPEED * (slowed ? SLOW_FACTOR : 1) * DT;
+  const sp = PLAYER_SPEED * speedMult(slowed, debt) * DT;
   const r = moveBox(pos.x, pos.y, (dx / len) * sp, (dy / len) * sp, solid);
   pos.x = r.x; pos.y = r.y;
 }

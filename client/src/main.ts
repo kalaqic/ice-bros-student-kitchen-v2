@@ -2,6 +2,8 @@ import { loadAll } from './engine/assets.ts';
 import { text } from './engine/font.ts';
 import { Game } from './engine/Game.ts';
 import { Session } from './game/Session.ts';
+import { SettingsPanel } from './ui/SettingsPanel.ts';
+import { SkillsPanel } from './ui/SkillsPanel.ts';
 import { Net } from './net/Net.ts';
 import { LevelScene } from './scenes/LevelScene.ts';
 import { LobbyScene } from './scenes/LobbyScene.ts';
@@ -11,10 +13,12 @@ const canvas = document.getElementById('game') as HTMLCanvasElement;
 const game = new Game(canvas);
 const session = new Session();
 
-export interface App { game: Game; session: Session; toMenu(err?: string): void }
+export interface App { game: Game; session: Session; toMenu(err?: string): void; settings(): void; skillsScreen(): void }
 const app: App = {
   game, session,
   toMenu(err = '') { session.error = err; game.go(new MenuScene(app)); },
+  settings() { game.open(new SettingsPanel(app)); },
+  skillsScreen() { game.open(new SkillsPanel(app)); },
 };
 
 // ---- scene routing driven by the server ----
@@ -28,7 +32,9 @@ session.net.on((m) => {
       break;
     case 'room': {
       const prevPhase = session.phase;
-      session.players = m.players; session.phase = m.phase; session.levelId = m.levelId; session.code = m.code; session.unlocked = m.unlocked;
+      session.players = m.players; session.phase = m.phase; session.levelId = m.levelId; session.code = m.code;
+      session.completed = m.completed; session.skills = m.skills;
+      Session.saveProgress(m.completed);
       if (m.phase === 'lobby' && !(game.scene instanceof LobbyScene)) game.go(new LobbyScene(app));
       else if (m.phase !== 'lobby' && prevPhase === 'lobby' && !(game.scene instanceof LevelScene)) game.go(new LevelScene(app));
       break;

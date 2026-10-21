@@ -41,48 +41,63 @@ Bilo koji Node host koji podržava WebSockets radi isto (Railway, Fly.io, VPS…
 
 ---
 
-## Kontrole
+## Kontrole (podrazumevane — sve se menjaju u PODESAVANJA)
 
 | Taster | Akcija |
 |---|---|
-| **WASD** (ili strelice) | kretanje (i u lobiju) |
-| **SPACE** | napravi liniju leda u pravcu gledanja / razbij led ispred sebe |
-| **E** | popij kafu → +1 srce (ograničen broj kafa, pokupi nove šolje u nivou) |
-| **F** | foto-blic: omami neprijatelje u krugu oko tebe (~2.7s), cooldown 6s |
-| **1–4** | emote (ĆAO!, AJMO!, GG, HAHA) |
+| **W A S D** | kretanje (i u lobiju) |
+| **SPACE** | LED: napravi liniju leda u pravcu gledanja / razbij led ispred sebe |
+| **E** | KAFA: +1 srce (kad se otključa) |
+| **F** | KAMERA: blic u konusu ispred tebe (kad se otključa) |
+| **Q** | INTERAKCIJA: počni / prekini zadatak pored stanice |
+| **ESC** | pauza meni (NASTAVI / PODESAVANJA / VESTINE / NAZAD U LOBI) — igra online i dalje teče |
+| **1–6** | emote; dok te dete nešto pita, **1–3** su odgovori (ili klik) |
 | **R** / Enter | READY u lobiju |
-| **M** | zvuk on/off |
+| **M** | brzo utišavanje svega (ako M nije dodeljen nekoj akciji) |
 
-Isprekidani kvadrat ispred tvog lika pokazuje gde će SPACE napraviti (beli) ili razbiti (crveni) led.
+### Podešavanja (dugme u meniju, lobiju i ESC meniju)
+* **KONTROLE:** klikni na taster pored akcije → pritisni novi taster. Ako je taster već zauzet, pojavi se upozorenje (*"TASTER F VEC KORISTI: KAMERA"*) i promena se odbija; brojevi 1–6 su rezervisani za emote/odgovore. **RESET NA PODRAZUMEVANO** vraća WASD/SPACE/E/F/Q/ESC. Čuva se u `localStorage` (`icebros.bindings`), a sva igra čita tastere iz tog sistema (`client/src/engine/bindings.ts`).
+* **ZVUK:** klizači za muziku i efekte + UTISAJ za svaki posebno. Čuva se u `icebros.audio`. Muzika kreće tek posle prvog klika/tastera (browser ne dozvoljava autoplay).
 
-## Pravila Nivoa 1 — Studentska kuhinja
+### Muzika
+Ubaci pesme u **`assets/audio/`** i restartuj server (server ih sam pokupi pri startu, bez build-a). Imena po slotu:
+`menu.mp3`, `lobby.mp3`, `stage1.mp3` … `stage4.mp3`, `boss.mp3`, a **`music.mp3`** važi za sve što nema svoj fajl. Radi i `.ogg/.wav/.m4a`. Dok nema nijednog fajla svira ugrađena chiptune melodija (u podešavanjima piše šta trenutno svira).
 
-* **Hrana:** plavi krug = Davidova (protein, kreatin, meal prep), crno-beli = Nemanjina (pica, burger, sok), zlatni = zajednička (nudle).
-  Pogrešna hrana ostaje na mapi, lik kaže *"BLJAK. GDE SU MAKROI?"* / *"BLJAK. GDE JE BURGER?"* i kratko je usporen.
-* **Co-op zagonetka:** David drži svoj **coding terminal** (KOD), Nemanja svoju **arkadu**. Kad su oba aktivirana, otvara se magacin u sredini (unutra su nudle i kafa).
-* **Zdravlje:** 3 srca. Dodir neprijatelja = −1 srce, kratka neranjivost i odbacivanje. Na 0 srca si **KO** — saigrač stane pored tebe i podigne te (ili ustaješ sam posle 10s). Ako obojica padnu, nivo se restartuje.
-* **Kafa** leči (ne napada). **Foto-blic** je jedino omamljivanje (ne ubija). **Led** blokira neprijatelje — možeš ih i zazidati.
-* Kad je sva hrana skupljena, otvaraju se vrata gore. **Obojica** moraju da uđu → **LEVEL COMPLETE** → nazad u lobi ili ponovo.
+---
 
-**Pokretanje bez npm-a:** `npm run build` pravi i `server/dist/server.mjs` (server sa svim zavisnostima u jednom fajlu), pa igra radi samo sa `node server/dist/server.mjs`, ili duplim klikom na **`POKRENI ICE BROS.command`** na Macu.
+## Progresija i veštine
 
-## Kampanja (11 nivoa)
+Napredak se čuva u browseru (`icebros.progress`) i šalje serveru pri ulasku u sobu; soba spaja napredak oba igrača, pa veštine važe za **obojicu**. Pređen nivo otključava sledeći; pobeda nad bosom završava stage i daje nagradu (ekran **SKILL UNLOCKED**). Pregled: dugme **VESTINE**.
 
-1 Studentska kuhinja · 2 Menza · 3 Hodnik doma · 4 Biblioteka · 5 Vešeraj · 6 Soba 404 · 7 Laboratorija · 8 Arhiva · 9 Teretana · 10 Gaming soba · **11 Kancelarija: BOSS BRANKA**
+| Veština | Kako se dobija | Šta radi |
+|---|---|---|
+| **LED** | od početka | pravi/razbija ledene zidove, zarobljava i drobi neprijatelje |
+| **KAFA** | Stage 1 (boss Studentska hrana) | +1 srce, nema prelečenja, ograničen broj šolja + cooldown, ne omamljuje |
+| **KAMERA** | Stage 2 (boss Sonja Kukman) | blic u konusu ispred tebe; neprijatelji omamljeni (bliže = duže), bosovi primaju štetu: daleko 0 / srednje 1 / izbliza 3 (kritično). Cooldown 6s |
+| **STRPLJENJE** (pasivno) | Stage 3 (boss Branka) | zadaci ~35% brže, podizanje saigrača ~35% brže |
 
-Pređeni nivo otključava sledeći (otključavanje važi za sobu). U lobiju strelicama `<` `>` biraš nivo, a posle pobede dugme vodi pravo na sledeći.
+Zaključana veština se ne može koristiti (server je odbija, HUD piše *ZAKLJUCANO — POSLE STAGE X*). Kad ponovo igraš raniji stage, otključane veštine su dostupne.
 
-**Branka, šefica haosa:** stoji gore na sredini i jedino je **foto-blic (F)** povređuje (−1 HP, ima 40 HP i kratko je omami). Da bi je uslikao, moraš blizu, a to je rizično:
-* **Vatrena kugla:** gađa direktno jednog od vas. Ledeni blok je zaustavlja (i istopi se), pa led služi kao štit.
-* **Ruke gore:** po podu se pojave crvene oznake, a posle ~2s na njih padne vatra. Skloni se sa oznake.
-* **Udarni talas:** ako stojiš preblizu, digne talas oko sebe.
-* **Ispod pola HP-a pobesni:** brže baca, tri kugle odjednom, više oznaka.
+Brzina zadatka = `osnovna × afinitet lika × strpljenje` (`shared/tasks.ts`):
+* **David:** matematika 1.5×, istorija 1.4×, slovenački 0.8×
+* **Nemanja:** slovenački 1.5×, matematika 0.85×, hemija 1.15×
+Obojica mogu da rade svaki školski zadatak; KOD je samo Davidov (laptop), ARKADA samo Nemanjina (slušalice + džojstik).
 
-Šolje kafe u uglovima su za lečenje. Kad joj HP padne na 0, nivo je pređen.
+## Kampanja: 4 stagea, 15 nivoa
 
-`ICEBROS_UNLOCK_ALL=1 npm start` otključava sve nivoe (za testiranje).
+**Stage 1 — STUDENTSKA KUHINJA** (Kuhinja · Menza · **boss STUDENTSKA HRANA**). Samo led. Slop neprijatelji: kad ih zazidaš ledom smrznu se, a kad razbiješ led pored njih — smrvljeni (vraćaju se posle 15s). Boss je ogromni slop: pljuje mast, sos koji usporava, nudle, ostavlja blato na podu i priziva slopove. Zazidaj je ledom (5+ blokova oko nje) dok se ne smrzne, pa razbij taj led → šteta. Nagrada: **KAFA**.
 
-Ako neko izgubi vezu usred nivoa, igra se pauzira do 45s. Refresh ili ponovo otvoren link vraća igrača na njegovo mesto.
+**Stage 2 — EKONOMSKA SKOLA** (Biblioteka · Učionica 12 · Arhiva · **boss SONJA KUKMAN**). Neprijatelji imaju kamere: sporiji su, ali posle crvene isprekidane linije (upozorenje) bljesnu i omame te. Sonja se pobeđuje rešavanjem ISPITA na klupama (Q), uz izbegavanje blica, tornada papira, F-ocena i bačenih testova. Nagrada: **KAMERA**. Na ponovnom igranju školski neprijatelji su "navikli na blic": omamljenje traje samo 40%, a elitni prefekt je potpuno imun.
+
+**Stage 3 — DRPD** (Hodnik · Igraonica · Učionica · **boss BRANKA**). Deca nisu neprijatelji: trče, blokiraju put i prilaze da pitaju pitanje (matematika, istorija, slovenački, hemija). Tačan odgovor → dete je srećno i više ne smeta. Pogrešan → vraća se istom igraču: *"JESI LI SIGURAN DA JE TO TACAN ODGOVOR?"*. Slikanje ili zazidavanje deteta = kazna (−1 srce). Odrasli radnici su pravi neprijatelji. Zadaci (Q) otvaraju rešetke/izlaz. Branka ostaje kao ranije (vatrene kugle, oznake na podu, udarni talas), sad sa kamerom po daljini. Nagrada: **STRPLJENJE**.
+
+**Stage 4 — ZIVOT.EXE** *(skola je bila tutorijal)* (Poreska uprava · Banka · Opština · **finalni boss THE COLLECTOR**). Sve veštine zajedno, protiv kombinacija:
+* **Poreznik** baca račune · **Birokrata** zaključava nasumičnu veštinu (*"FALI VAM JEDAN PAPIR!"*) · **Bankar** baca novac koji daje **DUG** (sporiji si, cooldown duži) · **Stanodavac** baca ključeve · **Regruter** juri (dash) · **Osiguranje** baca polise koje usporavaju · **Službenik** razbija tvoj led i pišti zviždaljkom.
+* **THE COLLECTOR**: TAX / RENT / INTEREST / FEE / LATE FEE / SERVICE FEE računi, kiša novca, dug koji navodi, udarac oko sebe. Šteta samo kamerom — izdaleka 0, izbliza kritično, pa moraš rizikovati.
+
+Težina raste kroz mehanike, ne kroz HP: s1 led, s2 omamljivanje + timing, s3 prioriteti + deca + afiniteti, s4 sve odjednom.
+
+`ICEBROS_UNLOCK_ALL=1 npm start` otključava sve (za testiranje). Ako neko izgubi vezu usred nivoa, igra se pauzira do 45s; refresh/link vraća igrača na mesto.
 
 ---
 
@@ -97,13 +112,20 @@ client/            browser klijent (TypeScript, canvas renderer, esbuild bundle)
   src/net/         WebSocket + auto-reconnect + resume tokeni
 server/src/        autoritativni Node server (http + ws)
   Room.ts          sobe, kodovi, ready, faze, reconnect, slanje snapshot-a
-  LevelSim.ts      simulacija nivoa: kretanje, led, hrana, neprijatelji, HP, kafa, blic, stanice, izlaz
+  LevelSim.ts      simulacija nivoa: kretanje, led, hrana, neprijatelji (sposobnosti iz podataka), projektili, zone na podu,
+                   veštine (kapija canUse), kamera-konus, zadaci + afiniteti, deca + kviz, dug/omamljenje/zaključavanje, izlaz
+  Boss.ts          Studentska hrana, Sonja Kukman, Branka, The Collector (zajednička osnova: HP, bes, šteta od slike)
 shared/            kod koji koriste i server i klijent
   physics.ts       isto kretanje/kolizija na serveru i u predikciji klijenta
   levels/          podaci nivoa (mapa kao ASCII, itemi, neprijatelji, stanice)
-  bosses.ts        podaci za buduće boss-ove (Nemanjin tata, Profesor)
-  levels/campaign.ts  nivoi 2-11 (stvari, neprijatelji i spawn upisani pravo u ASCII mapu)
-server/src/Boss.ts  Branka: vatrene kugle, oznake + vatra sa neba, udarni talas, bes
+  skills.ts        veštine + kad se otključavaju (skillsFor), strpljenje
+  stages.ts        4 stagea: ime, neprijatelji (1-6 u mapi), nagrada, muzika, izgled
+  tasks.ts         tipovi zadataka (taskAnimationType coding/gaming/studying) + AFINITETI likova
+  enemies.ts       neprijatelji kao podaci: brzina, sposobnosti (flash/throw/lock/icebreak/dash/whistle), otpor na kameru
+  camera.ts        konus kamere, daljine, kvalitet slike
+  quiz.ts          pitanja dece
+  bosses.ts        imena bosova + šteta od slike po daljini
+  levels/          level1.ts + campaign.ts (nivoi 2-15), index.ts (redosled, otključavanje)
   protocol.ts      tipovi poruka
 tools/             asset pipeline (python) + testovi
 ```
@@ -115,9 +137,11 @@ tools/             asset pipeline (python) + testovi
 ### Dodavanje sadržaja
 
 * **Novi nivo:** kopiraj `shared/levels/level1.ts`, izmeni ASCII mapu (legenda u `shared/level.ts`), registruj u `shared/levels/index.ts`. Server validira mapu pri startu.
-* **Asimetrične zagonetke:** `stations` u definiciji nivoa vezuju slovo na mapi za ulogu (`L` = Davidov terminal, `A` = Nemanjina arkada); kad su sve aktivne, otvaraju se sva `G` polja. Nove vrste (mini-igre, timed terminal…) dodaju se u `LevelSim.tickStations`.
+* **Zadaci:** slovo na mapi = tip zadatka (`TASK_BY_CODE` u `shared/tasks.ts`: L kod, A arkada, M matematika, Y istorija, V slovenački, Q hemija, U ispit). Novi tip: dodaj ga u `TASKS` sa `anim` (coding/gaming/studying) i po želji afinitete. Kad su svi zadaci gotovi, otvaraju se `G` rešetke (ili izlaz ako nema rešetke).
+* **Novi neprijatelj:** jedan unos u `shared/enemies.ts` (sprite ključ, brzina, sposobnosti) + broj 1-6 u `roster`-u stagea.
+* **Nova veština / nagrada:** `shared/skills.ts` (`unlockStage`) i `reward` u `shared/stages.ts`.
 * **Boss-ovi:** `shared/bosses.ts` već ima Nemanjinog tatu ("SVE SE MOZE KAD SE HOCE", "NEMANJA NADJI POSAO", "A NEMANJA KAKO DAVID MOZE") i Profesora ("KOJA JE MARZA PRIHVATLJIVA NA TRZISTU", "TRZISNI NACRT 8. POGLAVLJE") kao podatke: faze, napadi, citati.
-* **Zvuk:** svi efekti su trenutno sintetizovani (`client/src/engine/audio.ts`). Za pravi fajl dodaj ga u `assets/runtime/sfx/` i upiši ime u `SAMPLE_FILES`.
+* **Zvuk:** efekti su sintetizovani (`client/src/engine/audio.ts`); muzika iz `assets/audio/` (vidi gore), slotovi menu/lobby/stage1-4/boss.
 
 ### Asseti
 
@@ -127,6 +151,8 @@ Originali iz `assets/` se ne menjaju. `npm run assets` (python3 + pillow, numpy,
 
 * `tools/extract_sprites_v2.py` — bolje animacije iz `david_nemanja_sheet.png` (idle, walk za lobi, run za nivo, slikanje kamerom, flash efekat) i `ice_shot.png` (bacanje leda, ICE BLAST projektil, ICE BLOCK CREATE). Hodanje/trčanje koristi originalni walk ciklus iz prvih sheetova. `celebration.png` daje slavlje na kraju nivoa, a `koncked_down.png` padanje, ležanje (traženje pomoći), scenu podizanja saigrača i bro handshake posle revive-a (`assets/runtime/duo/`). Primeri omamljenih neprijatelja iz sheeta se namerno ne koriste: svaki neprijatelj dobija zvezdice iznad glave.
 
+* `tools/extract_stages.py` — sve za 4 stagea iz sheetova u `assets/` (animacije zadataka David laptop / Nemanja slušalice+džojstik, neprijatelji, bosovi, projektili, efekti, pločice i nameštaj po stageu, pozadine) u `assets/runtime/stage/` + `manifest.json`. Klijent učitava po ključu iz manifesta; ako neki ključ fali, crta jasan privremeni placeholder (ne menja logiku), pa se novi crtež samo ubaci i ponovo pokrene skripta.
+
 `assets/concept_art_ref.png` je kopija `concept art.png` (bez razmaka u imenu, za skripte).
 
 ---
@@ -135,13 +161,14 @@ Originali iz `assets/` se ne menjaju. `npm run assets` (python3 + pillow, numpy,
 
 ```bash
 npm run verify               # typecheck + pravila simulacije + build
-npm test                     # deterministički testovi pravila (HP, kafa, blic, KO/revive, led, restart)
+npm test                     # 57 testova pravila: progresija, zaključane veštine, kafa, konus kamere, otpor stage 2,
+                             # šteta bosu po daljini, afiniteti, strpljenje (zadaci + revive), deca + kviz, led/slop, bosovi, dug/lock
 
 # sa pokrenutim serverom:
-npm start &  npm run test:net                         # 2 bota: soba, join, auto-uloga, puna soba, sync, led, cooldown, pauza/resume
-ICEBROS_PEACEFUL=1 npm start &  npm run test:playthrough   # 2 bota prelaze ceo Nivo 1 (pogrešna hrana, stanice, kapija, izlaz, complete)
+npm start &  npm run test:net                         # 2 bota: soba, sync, led, cooldown, pauza/resume, zaključane veštine, spajanje napretka
+ICEBROS_PEACEFUL=1 ICEBROS_DEBUG=1 npm start &  npm run test:playthrough   # 2 bota prelaze svih 11 normalnih nivoa (zadaci sa Q, kviz dece, kapije, izlaz)
 ```
 
-`ICEBROS_DEBUG=1 npm start` uključuje dev komande iz browser konzole: `__net.send({t:'debug', cmd:'collectAll' | 'hurt' | 'stations' | 'toExit'})`.
+`ICEBROS_DEBUG=1 npm start` uključuje dev komande iz browser konzole: `__net.send({t:'debug', cmd:'collectAll' | 'hurt' | 'ko' | 'stations' | 'toStation' | 'toExit' | 'killAll' | 'nearBoss' | 'bossLow' | 'bossKill' | 'unlockAll' | 'resetProgress'})`.
 
 Stari prototip (`game.mjs`, `index.html`) je premešten u `legacy/` radi reference.

@@ -5,6 +5,8 @@
  */
 import { WebSocket } from 'ws';
 import type { ServerMsg, Snapshot } from '../shared/protocol.ts';
+import { LEVEL_ORDER } from '../shared/levels/index.ts';
+const ALL_DONE = LEVEL_ORDER.map((l) => l.id);
 
 const URL = process.env.WS_URL || 'ws://localhost:2567/ws';
 type Bot = { ws: WebSocket; msgs: ServerMsg[]; snap?: Snapshot; ice: number[]; id?: string; role?: string; code?: string; seq: number };
@@ -32,7 +34,7 @@ async function walk(b: Bot, dx: number, dy: number, ticks: number) {
 }
 
 const A = await bot();
-send(A, { t: 'create', role: 'david' });
+send(A, { t: 'create', role: 'david', progress: ALL_DONE });
 await sleep(200);
 check(!!A.code && A.role === 'david', `room created (${A.code}), A is david`);
 
@@ -100,6 +102,35 @@ const A2 = await bot();
 send(A2, { t: 'resume', code: A.code, token });
 await sleep(300);
 check(A2.role === 'david' && !B.snap!.paused, 'player resumes with token and the level unpauses');
+
+// ---------------- progression: a fresh save only has ICE; the server refuses locked skills
+const lastRoom = (b: Bot) => [...b.msgs].reverse().find((m) => m.t === 'room') as Extract<ServerMsg, { t: 'room' }> | undefined;
+const F = await bot();
+send(F, { t: 'create', role: 'david', progress: [] });
+await sleep(200);
+check(JSON.stringify(lastRoom(F)?.skills) === '["ice"]', `fresh room: skills = ${JSON.stringify(lastRoom(F)?.skills)}`);
+const G = await bot();
+send(G, { t: 'join', code: F.code, role: 'nemanja', progress: [] });
+await sleep(200);
+send(F, { t: 'ready', v: true }); send(G, { t: 'ready', v: true });
+await sleep(400);
+const evs: string[] = [];
+F.ws.on('message', (d) => { const m = JSON.parse(String(d)); if (m.t === 's') for (const e of m.ev) evs.push(e.k + ':' + (e.why ?? '')); });
+send(F, { t: 'act', a: 'camera' }); send(F, { t: 'act', a: 'coffee' });
+await sleep(250);
+check(me(F).cam === 0 && me(F).cof === 0, 'locked CAMERA / COFFEE do nothing on a fresh save');
+check(evs.filter((e) => e === 'denied:locked').length === 2, 'server answers locked skills with a denied event');
+check(F.snap!.e.length === 3, 'stage 1 level 1 runs on a fresh save');
+// teammate with stage-1 progress joins a new room -> progress is merged, COFFEE unlocks for both
+const H = await bot();
+send(H, { t: 'create', role: 'david', progress: [] });
+await sleep(200);
+const I = await bot();
+send(I, { t: 'join', code: H.code, role: 'nemanja', progress: ['level1', 'menza', 'boss_hrana'] });
+await sleep(250);
+check(JSON.stringify(lastRoom(H)?.skills) === '["ice","coffee"]', `progress merges on join -> ${JSON.stringify(lastRoom(H)?.skills)}`);
+check(lastRoom(H)?.completed.length === 3, 'room knows the completed levels');
+for (const b of [A2, B, F, G, H, I]) b.ws.close();
 
 console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);
