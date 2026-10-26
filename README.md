@@ -67,9 +67,17 @@ Bilo koji Node host koji podržava WebSockets radi isto (Railway, Fly.io, VPS…
 * **KONTROLE:** klikni na taster pored akcije → pritisni novi taster. Ako je taster već zauzet, pojavi se upozorenje (*"TASTER F VEC KORISTI: KAMERA"*) i promena se odbija; brojevi 1–6 su rezervisani za emote/odgovore. **RESET NA PODRAZUMEVANO** vraća WASD/SPACE/E/F/Q/ESC. Čuva se u `localStorage` (`icebros.bindings`), a sva igra čita tastere iz tog sistema (`client/src/engine/bindings.ts`).
 * **ZVUK:** klizači za muziku i efekte + UTISAJ za svaki posebno. Čuva se u `icebros.audio`. Muzika kreće tek posle prvog klika/tastera (browser ne dozvoljava autoplay).
 
-### Muzika
-Ubaci pesme u **`assets/audio/`** i restartuj server (server ih sam pokupi pri startu, bez build-a). Imena po slotu:
-`menu.mp3`, `lobby.mp3`, `stage1.mp3` … `stage4.mp3`, `boss.mp3`, a **`music.mp3`** važi za sve što nema svoj fajl. Radi i `.ogg/.wav/.m4a`. Dok nema nijednog fajla svira ugrađena chiptune melodija (u podešavanjima piše šta trenutno svira).
+### Muzika i zvuk pobede
+
+Originali su u **`song/`** (ne menjaju se). `python3 tools/prepare_audio.py` (treba ffmpeg) od njih pravi fajlove koje igra koristi u `assets/audio/`:
+
+| Original | U igri | Gde svira |
+|---|---|---|
+| `song/song.flac` | `music.mp3` (odsečeno ~5 s tišine na kraju) | meni, lobi i svi obični nivoi, u krug |
+| `song/boss-fight.wav` | `boss.flac` (tačno 32 takta @109 BPM, prvi prazan takt odsečen) | boss nivoi, savršen loop bez praznine |
+| `song/win.wav` | `sfx-win.mp3` | kad pređete nivo (muzika se na trenutak utiša) |
+
+Muzika se pušta preko Web Audio bafera, pa je loop bez ikakve rupe. Server pri startu sam pokupi sve iz `assets/audio/`. Imena po slotu: `menu`, `lobby`, `stage1`…`stage4`, `boss`, a `music` važi za sve ostalo; fajlovi `sfx-<ime>` su zvučni efekti. Ako nema nijednog fajla, svira ugrađena chiptune melodija.
 
 ---
 

@@ -5,7 +5,7 @@
 export type Sfx =
   | 'ice' | 'iceBreak' | 'iceFail' | 'shutter' | 'stun' | 'sip' | 'heal' | 'collect' | 'disgust' | 'hit' | 'ko'
   | 'revive' | 'ready' | 'complete' | 'click' | 'join' | 'gate' | 'exit' | 'station' | 'step' | 'emote' | 'coffeePickup'
-  | 'unlock' | 'denied' | 'quiz' | 'correct' | 'wrong' | 'telegraph' | 'money' | 'crush' | 'type';
+  | 'unlock' | 'denied' | 'quiz' | 'correct' | 'wrong' | 'telegraph' | 'money' | 'crush' | 'type' | 'win';
 
 const SAMPLE_FILES: Partial<Record<Sfx, string>> = {};
 
@@ -33,6 +33,11 @@ export class Audio {
   private wantSlot: MusicSlot | null = null;
   private el: HTMLAudioElement | null = null;
   private elFile = '';
+  /** decoded music files: looped with AudioBufferSourceNode = sample-perfect, gapless loops */
+  private buffers = new Map<string, Promise<AudioBuffer | null>>();
+  private track: { file: string; src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private fileGain: GainNode | null = null;
+  private duckUntil = 0;
   private synth: { slot: MusicSlot; timer: number; step: number; next: number } | null = null;
   /** true after the first user gesture (browsers block autoplay before that) */
   unlocked = false;
@@ -45,7 +50,11 @@ export class Audio {
       if (raw) this.settings = { ...this.settings, ...raw };
       else if (localStorage.getItem('icebros.muted') === '1') { this.settings.musicMuted = true; this.settings.sfxMuted = true; }
     } catch { /* ignore */ }
-    fetch('assets/audio/index.json', { cache: 'no-store' }).then((r) => r.json()).then((f: string[]) => { this.files = Array.isArray(f) ? f : []; if (this.unlocked && this.wantSlot) this.startMusic(this.wantSlot, true); }).catch(() => {});
+    fetch('assets/audio/index.json', { cache: 'no-store' }).then((r) => r.json()).then((f: string[]) => {
+      this.files = Array.isArray(f) ? f : [];
+      if (this.ctx) for (const x of this.files) { const m = /^sfx-([a-z0-9]+)\./i.exec(x); if (m) void this.loadBuffer(x).then((b) => { if (b) this.samples.set(m[1] as Sfx, b); }); }
+      if (this.unlocked && this.wantSlot) this.startMusic(this.wantSlot, true);
+    }).catch(() => {});
     const unlock = () => {
       this.unlocked = true;
       this.ensure();
@@ -66,7 +75,13 @@ export class Audio {
       this.master.connect(this.ctx.destination);
       this.sfxGain = this.ctx.createGain(); this.sfxGain.connect(this.master);
       this.musicGain = this.ctx.createGain(); this.musicGain.connect(this.master);
+      this.fileGain = this.ctx.createGain(); this.fileGain.connect(this.master);
       this.applyVolumes();
+      // sound effects shipped in assets/audio as sfx-<name>.* (e.g. sfx-win.mp3)
+      for (const f of this.files) {
+        const m = /^sfx-([a-z0-9]+)\./i.exec(f);
+        if (m) this.loadBuffer(f).then((b) => { if (b) this.samples.set(m[1] as Sfx, b); }).catch(() => {});
+      }
       for (const [name, file] of Object.entries(SAMPLE_FILES)) {
         fetch('assets/sfx/' + file).then((r) => r.arrayBuffer()).then((b) => this.ctx!.decodeAudioData(b))
           .then((buf) => this.samples.set(name as Sfx, buf)).catch(() => {});
@@ -78,6 +93,12 @@ export class Audio {
     const m = this.settings.musicMuted ? 0 : this.settings.music;
     if (this.sfxGain) this.sfxGain.gain.value = this.settings.sfxMuted ? 0 : this.settings.sfx * 0.35;
     if (this.musicGain) this.musicGain.gain.value = m * 0.22;
+    if (this.fileGain && this.ctx) {
+      const ducked = this.ctx.currentTime < this.duckUntil;
+      this.fileGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.fileGain.gain.setValueAtTime(m * 0.75 * (ducked ? 0.25 : 1), this.ctx.currentTime);
+      if (ducked) this.fileGain.gain.linearRampToValueAtTime(m * 0.75, this.duckUntil + 0.6);
+    }
     if (this.el) this.el.volume = Math.max(0, Math.min(1, m));
   }
   set(patch: Partial<AudioSettings>) {
@@ -97,28 +118,65 @@ export class Audio {
     if (this.unlocked) this.startMusic(slot, false);
   }
   private resolve(slot: MusicSlot): string | null {
+    const music = this.files.filter((x) => !/^sfx-/i.test(x));
     for (const c of SLOT_CANDIDATES[slot]) {
-      const f = this.files.find((x) => x.replace(/\.[a-z0-9]+$/i, '').toLowerCase() === c);
+      const f = music.find((x) => x.replace(/\.[a-z0-9]+$/i, '').toLowerCase() === c);
       if (f) return f;
     }
-    return this.files.find((x) => /^music/i.test(x)) ?? this.files[0] ?? null;
+    return music.find((x) => /^music/i.test(x)) ?? music[0] ?? null;
+  }
+  private loadBuffer(file: string): Promise<AudioBuffer | null> {
+    let p = this.buffers.get(file);
+    if (!p) {
+      p = fetch('assets/audio/' + file).then((r) => r.arrayBuffer()).then((b) => this.ctx!.decodeAudioData(b)).catch(() => null);
+      this.buffers.set(file, p);
+    }
+    return p;
+  }
+  private stopTrack(fade = 0.5) {
+    const t = this.track; this.track = null;
+    if (!t || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    t.gain.gain.setValueAtTime(t.gain.gain.value, now); t.gain.gain.linearRampToValueAtTime(0, now + fade);
+    t.src.stop(now + fade + 0.05);
+  }
+  /** gapless loop through Web Audio; falls back to <audio loop> if the browser can't decode the file */
+  private playFile(slot: MusicSlot, file: string) {
+    if (this.track?.file === file) { this.playing = { slot, source: file }; return; }
+    this.stopTrack();
+    this.el?.pause(); this.el = null; this.elFile = '';
+    void this.loadBuffer(file).then((buf) => {
+      if (this.wantSlot !== slot || this.resolve(slot) !== file || this.track?.file === file) return;
+      if (!buf || !this.ctx || !this.fileGain) { this.playElement(slot, file); return; }
+      const src = this.ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+      const gain = this.ctx.createGain(); const now = this.ctx.currentTime;
+      gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(1, now + 0.4);
+      src.connect(gain).connect(this.fileGain);
+      src.start(now);
+      this.stopTrack();
+      this.track = { file, src, gain };
+      this.playing = { slot, source: file };
+    });
+  }
+  private playElement(slot: MusicSlot, file: string) {
+    if (this.el && this.elFile === file) { void this.el.play().catch(() => {}); this.playing = { slot, source: file }; return; }
+    this.el?.pause();
+    const el = new window.Audio('assets/audio/' + file);
+    el.loop = true; this.el = el; this.elFile = file;
+    this.applyVolumes();
+    void el.play().then(() => { this.playing = { slot, source: file }; }).catch(() => {});
   }
   private startMusic(slot: MusicSlot, force: boolean) {
     this.ensure();
     const file = this.resolve(slot);
     if (file) {
       this.stopSynth();
-      if (this.el && this.elFile === file && !force) { this.playing = { slot, source: file }; return; }
-      if (this.el && this.elFile === file) { void this.el.play().catch(() => {}); this.playing = { slot, source: file }; return; }
-      this.el?.pause();
-      const el = new window.Audio('assets/audio/' + file);
-      el.loop = true; this.el = el; this.elFile = file;
-      this.applyVolumes();
-      void el.play().then(() => { this.playing = { slot, source: file }; }).catch(() => {});
+      if (this.el && this.elFile === file) { if (force) void this.el.play().catch(() => {}); this.playing = { slot, source: file }; return; }
+      this.playFile(slot, file);
       return;
     }
     // no music file yet: built-in chiptune placeholder (same slot names, so a dropped-in file replaces it)
-    this.el?.pause(); this.el = null; this.elFile = '';
+    this.el?.pause(); this.el = null; this.elFile = ''; this.stopTrack(0.2);
     if (this.synth?.slot === slot) return;
     this.stopSynth();
     if (!this.ctx) return;
@@ -187,7 +245,9 @@ export class Audio {
     if (this.settings.sfxMuted) return;
     this.ensure();
     if (!this.ctx || !this.sfxGain) return;
+    if (name === 'win' && this.ctx) { this.duckUntil = this.ctx.currentTime + 3.2; this.applyVolumes(); }
     const buf = this.samples.get(name);
+    if (!buf && name === 'win') { this.play('complete'); return; }
     if (buf) { const s = this.ctx.createBufferSource(); s.buffer = buf; s.connect(this.sfxGain); s.start(); return; }
     switch (name) {
       case 'ice': this.tone(1200, 0.18, 'triangle', 0.25, 2400); this.noise(0.15, 0.12, 4000); break;

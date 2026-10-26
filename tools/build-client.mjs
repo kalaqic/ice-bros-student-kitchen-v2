@@ -18,7 +18,7 @@ fs.cpSync(path.join(ROOT, 'assets', 'runtime'), path.join(DIST, 'assets'), { rec
 // music / sfx: copy assets/audio and write an index so the client knows which tracks exist
 const AUDIO = path.join(ROOT, 'assets', 'audio');
 fs.mkdirSync(path.join(DIST, 'assets', 'audio'), { recursive: true });
-const audioFiles = fs.existsSync(AUDIO) ? fs.readdirSync(AUDIO).filter((f) => /\.(mp3|ogg|wav|m4a)$/i.test(f)) : [];
+const audioFiles = fs.existsSync(AUDIO) ? fs.readdirSync(AUDIO).filter((f) => /\.(mp3|ogg|wav|m4a|flac)$/i.test(f)) : [];
 for (const f of audioFiles) fs.copyFileSync(path.join(AUDIO, f), path.join(DIST, 'assets', 'audio', f));
 fs.writeFileSync(path.join(DIST, 'assets', 'audio', 'index.json'), JSON.stringify(audioFiles));
 

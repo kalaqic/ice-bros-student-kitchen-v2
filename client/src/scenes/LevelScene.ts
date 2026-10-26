@@ -436,7 +436,7 @@ export class LevelScene implements Scene {
       case 'bossDead':
         this.banner(`${this.bossName()} JE PAO!`, 'BOSS POBEDJEN', '#7fe08a');
         if (this.boss) this.fx.burst(this.boss.x, this.boss.y, 40, { shape: 'star', speed: 260, colors: ['#ffd34d', '#ffffff', '#ff7a6e'], size: 7, max: 1.2 });
-        a.play('complete');
+        a.play('crush');
         break;
       case 'bossSay': this.bossSay = { text: ev.text, t: 2.6 }; break;
     }

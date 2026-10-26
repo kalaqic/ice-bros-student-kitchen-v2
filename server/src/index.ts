@@ -20,7 +20,7 @@ function syncAudio() {
     const src = path.join(ROOT, 'assets', 'audio'), dst = path.join(DIST, 'assets', 'audio');
     if (!fs.existsSync(DIST)) return;
     fs.mkdirSync(dst, { recursive: true });
-    const files = fs.existsSync(src) ? fs.readdirSync(src).filter((f) => /\.(mp3|ogg|wav|m4a)$/i.test(f)) : [];
+    const files = fs.existsSync(src) ? fs.readdirSync(src).filter((f) => /\.(mp3|ogg|wav|m4a|flac)$/i.test(f)) : [];
     for (const f of files) {
       const a = path.join(src, f), b = path.join(dst, f);
       if (!fs.existsSync(b) || fs.statSync(b).size !== fs.statSync(a).size) fs.copyFileSync(a, b);

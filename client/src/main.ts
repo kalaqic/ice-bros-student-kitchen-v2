@@ -45,6 +45,7 @@ session.net.on((m) => {
       if (!(game.scene instanceof LevelScene) || game.scene.levelId !== m.levelId) game.go(new LevelScene(app));
       break;
     case 'complete':
+      if (!session.complete) game.audio.play('win'); // assets/audio/sfx-win.* (fallback: synth jingle)
       session.complete = m.stats;
       break;
     case 'error':
