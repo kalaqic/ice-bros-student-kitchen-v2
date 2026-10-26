@@ -15,7 +15,7 @@ import { CAMERA_COOLDOWN_MS, COFFEE_MAX, MAX_HP, STATION_RANGE, TILE } from '../
 import { ENEMIES } from '../../../shared/enemies.ts';
 import { ITEM_LABEL, ITEM_OWNER, type ItemKind } from '../../../shared/items.ts';
 import { type LevelDef, STATION_CODES, levelCols, levelRows, playerTileSolid, tileAt } from '../../../shared/level.ts';
-import { LEVELS, LEVEL_ORDER, levelIndex, levelUnlocked } from '../../../shared/levels/index.ts';
+import { LEVELS, LEVEL_ORDER, levelIndex, levelLabel, levelUnlocked } from '../../../shared/levels/index.ts';
 import { tileCenter, tileOf, type SolidFn } from '../../../shared/physics.ts';
 import type { BossSnap, EnemySnap, GameEvent, PlayerSnap, ServerMsg, Snapshot } from '../../../shared/protocol.ts';
 import { QUESTIONS, QUIZ_SURE } from '../../../shared/quiz.ts';
@@ -105,7 +105,13 @@ export class LevelScene implements Scene {
     this.off = this.app.session.net.on((m) => this.onMsg(m));
     this.app.game.audio.music(this.level.boss ? 'boss' : stageDef(this.level.stage).music);
   }
-  exit() { this.off?.(); if (this.pauseMenu) this.app.game.close(this.pauseMenu); }
+  exit() { this.off?.(); if (this.pauseMenu) { this.app.game.close(this.pauseMenu); this.app.session.net.send({ t: 'pause', v: false }); } }
+
+  private openPause() {
+    if (this.pauseMenu) return;
+    this.pauseMenu = new PauseMenu(this.app, () => { this.pauseMenu = null; });
+    this.app.game.open(this.pauseMenu);
+  }
 
   // ------------------------------------------------------------------ net
   private view(r: Role) {
@@ -443,9 +449,15 @@ export class LevelScene implements Scene {
 
   // ------------------------------------------------------------------ update
   update(dt: number) {
-    this.t += dt; this.now += dt;
     const { game, session } = this.app;
     const inp = game.input;
+    // real pause: the server froze the level, so everything on screen freezes too
+    if (this.paused && !session.complete) {
+      this.alpha = this.pred.update(0, { dx: 0, dy: 0 }, this.solid);
+      if (!game.blocked && inp.actionPressed('pause')) this.openPause();
+      return;
+    }
+    this.t += dt; this.now += dt;
     this.fx.update(dt);
     if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 2.2);
     if (this.intro > 0) this.intro -= dt;
@@ -471,7 +483,7 @@ export class LevelScene implements Scene {
     this.lastQuiz = mine?.qz ?? -1;
     const axis = complete || this.paused || blocked ? { dx: 0, dy: 0 } : inp.axis();
     this.alpha = this.pred.update(dt, axis, this.solid);
-    if (!complete && !blocked && inp.actionPressed('pause')) { this.pauseMenu = new PauseMenu(this.app, () => { this.pauseMenu = null; }); game.open(this.pauseMenu); }
+    if (!complete && !blocked && inp.actionPressed('pause')) this.openPause();
     if (!complete && !this.paused && !blocked) {
       if (inp.actionPressed('ice')) session.net.send({ t: 'act', a: 'ice' });
       if (inp.actionPressed('coffee')) session.net.send({ t: 'act', a: 'coffee' });
@@ -910,7 +922,7 @@ export class LevelScene implements Scene {
     const s = this.app.session;
     const L = this.level;
     const stg = stageDef(L.stage);
-    text(ctx, `STAGE ${L.stage}  -  NIVO ${L.number}`, 16, 14, { size: 2, color: stg.color, outline: C.navyD });
+    text(ctx, levelLabel(L.id), 16, 14, { size: 2, color: stg.color, outline: C.navyD });
     text(ctx, L.name, 16, 40, { size: 2, color: C.iceL });
     const total = L.items.length;
     const got = this.taken.size;
@@ -1070,7 +1082,7 @@ export class LevelScene implements Scene {
       const stg = stageDef(this.level.stage);
       ctx.save(); ctx.translate(cx, 300); ctx.scale(k, k);
       panel(ctx, -320, -90, 640, 190, 'navy');
-      text(ctx, `STAGE ${stg.n}: ${stg.name}`, 0, -70, { size: 2, color: stg.color }, 'center');
+      text(ctx, `${levelLabel(this.level.id)}  -  ${stg.name}`, 0, -70, { size: 2, color: stg.color }, 'center');
       text(ctx, this.level.name, 0, -44, { size: 4, color: C.white, outline: C.navyD }, 'center');
       wrap(this.level.intro, 580, 1).forEach((l, i) => text(ctx, l, 0, 4 + i * 14, { size: 1, color: C.iceL }, 'center'));
       text(ctx, s.solo ? 'SOLO: SKUPLJAS SVU HRANU I RADIS SVE ZADATKE SAM' : 'PLAVI KRUG = DAVID   BELI = NEMANJA   ZLATNI = ZAJEDNO', 0, 44, { size: 1, color: s.solo ? C.green : C.ice }, 'center');
@@ -1090,12 +1102,13 @@ export class LevelScene implements Scene {
     }
     const me = this.mySnap();
     if (me && me.qz >= 0 && !s.complete) this.drawQuiz(ctx, me, ui);
-    if (this.paused && !s.complete) {
+    if (this.paused && !s.complete && !this.pauseMenu) {
       ctx.fillStyle = 'rgba(11,20,40,0.6)'; ctx.fillRect(OX, OY, this.cols * TILE, this.rows * TILE);
       panel(ctx, cx - 300, 280, 600, 140, 'navy');
+      const manual = this.paused.startsWith('PAUZA');
       text(ctx, 'PAUZA', cx, 300, { size: 4, color: C.gold }, 'center');
-      text(ctx, this.paused, cx, 346, { size: 2, color: C.white }, 'center');
-      text(ctx, 'CEKAMO DA SE VRATI (45 S)...', cx, 378, { size: 1, color: C.ice }, 'center');
+      text(ctx, manual ? this.paused.replace('PAUZA: ', '') + ' JE PAUZIRAO IGRU' : this.paused, cx, 346, { size: 2, color: C.white }, 'center');
+      text(ctx, manual ? 'SVE STOJI DOK SE NE NASTAVI' : 'CEKAMO DA SE VRATI (45 S)...', cx, 378, { size: 1, color: C.ice }, 'center');
     }
     if (s.complete) this.drawComplete(ctx, ui);
   }
@@ -1126,7 +1139,7 @@ export class LevelScene implements Scene {
     panel(ctx, x, y, w, h, 'navy');
     text(ctx, st.stageDone ? `STAGE ${st.stageDone} COMPLETE!` : 'LEVEL COMPLETE!', cx, y + 26, { size: 5, color: C.gold, outline: C.navyD, shadow: '#c98a12' }, 'center');
     const sec = Math.floor(st.timeMs / 1000);
-    text(ctx, `${this.level.name}  -  VREME ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`, cx, y + 82, { size: 2, color: C.iceL }, 'center');
+    text(ctx, `${levelLabel(this.level.id)}: ${this.level.name}  -  VREME ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`, cx, y + 82, { size: 2, color: C.iceL }, 'center');
     const cols = ['HRANA', 'LED', 'BLIC', 'KAFA', 'UDARCI'];
     const keys = ['food', 'ice', 'flashes', 'coffee', 'hits'] as const;
     cols.forEach((c, i) => text(ctx, c, x + 250 + i * 82, y + 122, { size: 1, color: C.ice }, 'center'));
@@ -1162,8 +1175,8 @@ export class LevelScene implements Scene {
 
 /** ESC menu. The match keeps running online - this only pauses YOUR input. */
 class PauseMenu implements Overlay {
-  constructor(private app: App, private onClose: () => void) {}
-  private close() { this.app.game.close(this); this.onClose(); }
+  constructor(private app: App, private onClose: () => void) { app.session.net.send({ t: 'pause', v: true }); }
+  private close() { this.app.session.net.send({ t: 'pause', v: false }); this.app.game.close(this); this.onClose(); }
   update() {
     const inp = this.app.game.input;
     if (inp.wasPressed(bindings.code('pause')) || inp.wasPressed('Escape')) this.close();
@@ -1174,7 +1187,7 @@ class PauseMenu implements Overlay {
     ctx.fillStyle = 'rgba(5,10,25,0.6)'; ctx.fillRect(0, 0, 1280, 720);
     panel(ctx, 640 - 200, 170, 400, 380, 'navy');
     text(ctx, 'PAUZA', 640, 196, { size: 4, color: C.gold, outline: C.navyD }, 'center');
-    text(ctx, 'IGRA SE NASTAVLJA ONLINE!', 640, 240, { size: 1, color: '#ff9a8e' }, 'center');
+    text(ctx, this.app.session.solo ? 'IGRA STOJI' : 'IGRA STOJI I ZA DRUGOG IGRACA', 640, 240, { size: 1, color: C.iceL }, 'center');
     if (ui.button(ctx, 'NASTAVI', 640 - 140, 270, 280, 48, { color: 'gold', size: 2 })) this.close();
     if (ui.button(ctx, 'PODESAVANJA', 640 - 140, 334, 280, 44, { color: 'ice', size: 2 })) this.app.settings();
     if (ui.button(ctx, 'VESTINE', 640 - 140, 394, 280, 44, { color: 'ice', size: 2 })) this.app.skillsScreen();

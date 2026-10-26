@@ -147,6 +147,7 @@ wss.on('connection', (ws) => {
       case 'act': room.onAct(me, String(m.a)); break;
       case 'answer': room.onAnswer(me, Number(m.i)); break;
       case 'emote': room.onEmote(me, Number(m.e)); break;
+      case 'pause': room.onPause(me, m.v === true); break;
       case 'ready': room.onReady(me, !!m.v); break;
       case 'toLobby': if (room.phase !== 'lobby') room.toLobby(); break;
       case 'retry': room.retry(); break;

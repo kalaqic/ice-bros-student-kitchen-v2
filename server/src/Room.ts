@@ -24,6 +24,8 @@ export class Room {
   tickN = 0;
   lobbyEvents: GameEvent[] = [];
   emptySince = 0;
+  /** players that have the pause menu open: while anyone is in it the whole level is frozen */
+  pausers = new Set<Player>();
 
   /** solo room: one player does everything (all food, every task) */
   constructor(readonly code: string, readonly solo = false) {}
@@ -66,11 +68,13 @@ export class Room {
   }
 
   disconnect(p: Player) {
+    this.pausers.delete(p);
     p.connected = false; p.ws = null; p.disconnectedAt = Date.now(); p.ready = false; p.inputs = [];
     this.broadcastRoom();
   }
 
   remove(p: Player) {
+    this.pausers.delete(p);
     this.players = this.players.filter((q) => q !== p);
     if (this.phase !== 'lobby') this.toLobby();
     this.broadcastRoom();
@@ -98,6 +102,11 @@ export class Room {
     else if (a === 'coffee') this.sim.actCoffee(p);
     else if (a === 'camera') this.sim.actCamera(p);
     else if (a === 'interact') this.sim.actInteract(p);
+  }
+
+  /** ESC menu: really pauses the level for everybody (simulation clock stops) */
+  onPause(p: Player, v: boolean) {
+    if (v && this.phase === 'level') this.pausers.add(p); else this.pausers.delete(p);
   }
 
   onAnswer(p: Player, i: number) {
@@ -139,6 +148,7 @@ export class Room {
   }
 
   startLevel() {
+    this.pausers.clear();
     this.phase = 'level';
     this.sim = new LevelSim(LEVELS[this.levelId], this.players, this.skills, this.solo);
     for (const p of this.players) { p.inputs = []; p.lastIvSent = -1; }
@@ -164,6 +174,7 @@ export class Room {
   }
 
   retry() {
+    this.pausers.clear();
     if (this.phase === 'lobby' || !this.sim) return;
     this.phase = 'level';
     this.sim.skills = this.skills;
@@ -174,6 +185,7 @@ export class Room {
   }
 
   toLobby() {
+    this.pausers.clear();
     this.phase = 'lobby';
     this.sim = null;
     for (const p of this.players) {
@@ -188,6 +200,7 @@ export class Room {
     if (this.phase !== 'level') return null;
     const gone = this.players.find((p) => !p.connected);
     if (gone) return `${roleName(gone.role)} SE DISKONEKTOVAO...`;
+    if (this.pausers.size) return `PAUZA: ${[...this.pausers].map((q) => roleName(q.role)).join(' + ')}`;
     if (this.players.length < this.need) return 'CEKAM DRUGOG IGRACA';
     return null;
   }

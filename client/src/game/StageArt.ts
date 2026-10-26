@@ -27,6 +27,44 @@ const THEME_TINT: Record<string, string | null> = {
   office: 'rgba(200,60,60,0.16)', school: 'rgba(255,220,150,0.12)', kids: 'rgba(255,170,220,0.12)', city: 'rgba(90,110,160,0.18)',
 };
 
+/** split a cluster of cells into rectangles: horizontal runs first, 1-wide runs grow downwards instead */
+function rects(cells: [number, number][]): [number, number, number, number][] {
+  const key = (x: number, y: number) => x * 1000 + y;
+  const left = new Set(cells.map(([x, y]) => key(x, y)));
+  const out: [number, number, number, number][] = [];
+  const sorted = [...cells].sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  for (const [x, y] of sorted) {
+    if (!left.has(key(x, y))) continue;
+    let x1 = x;
+    while (left.has(key(x1 + 1, y))) x1++;
+    let y1 = y;
+    if (x1 === x) while (left.has(key(x, y1 + 1)) && !left.has(key(x + 1, y1 + 1)) && !left.has(key(x - 1, y1 + 1))) y1++;
+    for (let yy = y; yy <= y1; yy++) for (let xx = x; xx <= x1; xx++) left.delete(key(xx, yy));
+    out.push([x, y, x1, y1]);
+  }
+  return out;
+}
+
+/** underlay keeps the solid area readable, then one or more props stretched over the rectangle */
+function drawProps(g: CanvasRenderingContext2D, ims: HTMLImageElement[], x0: number, y0: number, x1: number, y1: number, seed: number) {
+  const bx = x0 * TILE, by = y0 * TILE, bw = (x1 - x0 + 1) * TILE, bh = (y1 - y0 + 1) * TILE;
+  g.fillStyle = 'rgba(16,28,54,0.28)'; g.fillRect(bx + 2, by + 4, bw - 4, bh - 4);
+  const aspect = ims[0].width / ims[0].height;
+  const n = Math.max(1, Math.round(bw / Math.max(TILE, bh * aspect)));
+  const pw = bw / n;
+  // tall narrow rectangles (a column of shelves) get props stacked on top of each other
+  const m = Math.max(1, Math.round(bh / Math.max(TILE, (pw + 6) / aspect)));
+  const ph = bh / m;
+  g.imageSmoothingEnabled = true;
+  for (let r = 0; r < m; r++) for (let i = 0; i < n; i++) {
+    const im = ims[(i + r + seed) % ims.length];
+    const s = Math.min((pw + 6) / im.width, (ph + 12) / im.height);
+    const dw = im.width * s, dh = im.height * s;
+    g.drawImage(im, bx + pw * i + (pw - dw) / 2, by + ph * (r + 1) - dh + 2, dw, dh);
+  }
+  g.imageSmoothingEnabled = false;
+}
+
 /**
  * Pre-rendered static level art. Uses the stage skin from shared/stages.ts when its art exists
  * (stage floor/wall tiles + furniture props per map letter), otherwise the original procedural tiles.
@@ -88,28 +126,16 @@ export function buildStaticLayer(L: LevelDef): HTMLCanvasElement {
     let keys: string[] | undefined = task ? (TASKS[task].sprite ? [TASKS[task].sprite!] : undefined) : skin.props[c];
     if (c === 'X') keys = undefined;
     const ims = (keys ?? []).map((k) => sp(k)).filter(Boolean) as HTMLImageElement[];
-    const rect = cells.length === (x1 - x0 + 1) * (y1 - y0 + 1);
-    if (!ims.length || !rect) {
+    if (!ims.length) {
       for (const [x, y] of cells) {
         const key = c === 'C' ? (['counter0', 'counter1', 'counter2', 'counter3'] as ImageKey[])[hash(x, y) % 7 > 3 ? 0 : hash(x, y) % 4] : LEGACY[c];
         if (key) g.drawImage(img[key], x * TILE, y * TILE);
       }
       continue;
     }
-    // underlay keeps the solid area readable, then one or more props stretched over the cluster
-    const bx = x0 * TILE, by = y0 * TILE, bw = (x1 - x0 + 1) * TILE, bh = (y1 - y0 + 1) * TILE;
-    g.fillStyle = 'rgba(16,28,54,0.28)'; g.fillRect(bx + 2, by + 4, bw - 4, bh - 4);
-    const aspect = ims[0].width / ims[0].height;
-    const n = Math.max(1, Math.round(bw / Math.max(TILE, bh * aspect)));
-    g.imageSmoothingEnabled = true;
-    for (let i = 0; i < n; i++) {
-      const im = ims[(i + hash(x0, y0)) % ims.length];
-      const pw = bw / n;
-      const s = Math.min((pw + 6) / im.width, (bh + 12) / im.height);
-      const dw = im.width * s, dh = im.height * s;
-      g.drawImage(im, bx + pw * i + (pw - dw) / 2, by + bh - dh + 2, dw, dh);
-    }
-    g.imageSmoothingEnabled = false;
+    // L / T shaped clusters are split into rectangles (horizontal runs, single cells grow downwards)
+    for (const [rx0, ry0, rx1, ry1] of rects(cells)) drawProps(g, ims, rx0, ry0, rx1, ry1, hash(rx0, ry0));
+    void x0; void x1; void y0; void y1;
   }
   // ---- soft shadows under walls / furniture
   for (let ty = 0; ty < rows - 1; ty++) for (let tx = 0; tx < cols; tx++) {

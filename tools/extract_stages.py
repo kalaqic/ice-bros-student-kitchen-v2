@@ -226,9 +226,11 @@ for key, box in [('item_euro', (830, 85, 975, 235)), ('item_laptop', (235, 255, 
 
 # ---------------------------------------------------------------- per-stage tile skins (single crops, scaled to 48px in game)
 SK = [
-  ('stage-2/assets.png', [('s2_floor_0', (20, 45, 130, 155)), ('s2_floor_1', (130, 100, 235, 205)), ('s2_wall_0', (452, 40, 535, 215)),
-    ('s2_wall_1', (660, 40, 760, 215)), ('s2_desk', (20, 275, 128, 378)), ('s2_teacher', (705, 265, 962, 400)),
-    ('s2_shelf', (300, 448, 398, 615)), ('s2_lockers', (20, 440, 275, 615)), ('s2_bench', (1245, 480, 1425, 590)),
+  # stage 2: ONE clean floor tile (inside the grout lines) and ONE plain corridor wall, used everywhere;
+  # the three ready-made bookshelves from the sheet
+  ('stage-2/assets.png', [('s2_floor_0', (23, 45, 68, 90)), ('s2_wall_0', (668, 42, 756, 212)),
+    ('s2_desk', (20, 275, 128, 378)), ('s2_teacher', (705, 265, 962, 400)),
+    ('s2_shelf', (298, 446, 396, 620)), ('s2_shelf2', (400, 446, 486, 620)), ('s2_shelf3', (490, 446, 600, 620)), ('s2_lockers', (20, 440, 275, 615)), ('s2_bench', (1245, 480, 1425, 590)),
     ('s2_plant', (350, 690, 425, 830)), ('s2_sink', (880, 450, 1065, 610)), ('s2_board', (995, 270, 1235, 410))]),
   ('stage-3/assets.png', [('s3_floor_0', (18, 35, 88, 122)), ('s3_floor_1', (95, 35, 165, 122)), ('s3_floor_2', (325, 35, 415, 122)),
     ('s3_wall_0', (18, 165, 90, 312)), ('s3_wall_1', (245, 165, 315, 312)), ('s3_kiddesk', (15, 568, 118, 652)), ('s3_kiddesk2', (185, 568, 290, 652)),

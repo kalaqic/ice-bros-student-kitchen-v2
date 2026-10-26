@@ -13,6 +13,7 @@ export type ClientMsg =
   | { t: 'act'; a: ActionId }
   | { t: 'answer'; i: number }
   | { t: 'emote'; e: number }
+  | { t: 'pause'; v: boolean }
   | { t: 'ready'; v: boolean }
   | { t: 'toLobby' }
   | { t: 'retry' }

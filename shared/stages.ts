@@ -38,8 +38,8 @@ export const STAGES: StageDef[] = [
     n: 2, name: 'EKONOMSKA SKOLA', subtitle: 'PAZI NA BLICEVE', reward: 'camera', music: 'stage2', color: '#ffd34d',
     roster: ['prefect', 'runner', 'monitor', 'runner', 'prefect', 'elite'],
     skin: {
-      floors: ['s2_floor_0', 's2_floor_1'], walls: ['s2_wall_0', 's2_wall_1'],
-      props: { C: ['s2_teacher'], T: ['s2_desk'], H: ['s2_shelf'], W: ['s2_lockers'], K: ['s2_sink'], S: ['s2_board'], F: ['s2_lockers'] },
+      floors: ['s2_floor_0'], walls: ['s2_wall_0'],
+      props: { C: ['s2_teacher'], T: ['s2_desk'], H: ['s2_shelf', 's2_shelf2', 's2_shelf3'], W: ['s2_lockers'], K: ['s2_sink'], S: ['s2_board'], F: ['s2_lockers'] },
       backdrop: 'bg_s2',
     },
   },

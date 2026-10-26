@@ -58,7 +58,7 @@ Bilo koji Node host koji podržava WebSockets radi isto (Railway, Fly.io, VPS…
 | **E** | KAFA: +1 srce (kad se otključa) |
 | **F** | KAMERA: blic u konusu ispred tebe (kad se otključa) |
 | **Q** | INTERAKCIJA: počni / prekini zadatak pored stanice |
-| **ESC** | pauza meni (NASTAVI / PODESAVANJA / VESTINE / NAZAD U LOBI) — igra online i dalje teče |
+| **ESC** | pauza (NASTAVI / PODESAVANJA / VESTINE / NAZAD U LOBI) — stvarno zaustavlja ceo nivo, i za drugog igrača (on vidi ko je pauzirao); igra stoji dok god je bilo ko u meniju |
 | **1–6** | emote; dok te dete nešto pita, **1–3** su odgovori (ili klik) |
 | **R** / Enter | READY u lobiju |
 | **M** | brzo utišavanje svega (ako M nije dodeljen nekoj akciji) |
@@ -92,6 +92,8 @@ Brzina zadatka = `osnovna × afinitet lika × strpljenje` (`shared/tasks.ts`):
 Obojica mogu da rade svaki školski zadatak; KOD je samo Davidov (laptop), ARKADA samo Nemanjina (slušalice + džojstik).
 
 ## Kampanja: 4 stagea, 15 nivoa
+
+Svaki nivo je označen kao **STAGE X - LEVEL Y** (u HUD-u, na uvodu, u lobiju i na kraju), a poslednji nivo stagea kao **STAGE X - BOSS**.
 
 **Stage 1 — STUDENTSKA KUHINJA** (Kuhinja · Menza · **boss STUDENTSKA HRANA**). Samo led. Slop neprijatelji: kad ih zazidaš ledom smrznu se, a kad razbiješ led pored njih — smrvljeni (vraćaju se posle 15s). Boss je ogromni slop: pljuje mast, sos koji usporava, nudle, ostavlja blato na podu i priziva slopove. Zazidaj je ledom (5+ blokova oko nje) dok se ne smrzne, pa razbij taj led → šteta. Nagrada: **KAFA**.
 

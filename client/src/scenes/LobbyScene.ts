@@ -9,7 +9,7 @@ import { LOBBY_SIGN, lobbySolid } from '../../../shared/lobby.ts';
 import type { PlayerSnap, ServerMsg } from '../../../shared/protocol.ts';
 import { roleName, type Role } from '../../../shared/types.ts';
 import { drawLobbyBg } from './common.ts';
-import { LEVEL_ORDER, levelIndex, levelUnlocked } from '../../../shared/levels/index.ts';
+import { LEVEL_ORDER, levelIndex, levelLabel, levelUnlocked } from '../../../shared/levels/index.ts';
 import { stageDef } from '../../../shared/stages.ts';
 import { bindings, keyLabel } from '../engine/bindings.ts';
 
@@ -160,7 +160,7 @@ export class LobbyScene implements Scene {
     const lv = LEVEL_ORDER[li];
     panel(ctx, 440, 616, 400, 92, 'navy');
     const stg = stageDef(lv.stage);
-    text(ctx, `STAGE ${stg.n} ${stg.name}  -  NIVO ${lv.number}/${LEVEL_ORDER.length}`, 640, 632, { size: 1, color: lv.boss ? '#ff8a7a' : stg.color }, 'center');
+    text(ctx, `${levelLabel(lv.id)}  (${stg.name})`, 640, 632, { size: 1, color: lv.boss ? '#ff8a7a' : stg.color }, 'center');
     text(ctx, lv.name, 640, 650, { size: lv.name.length > 11 ? 2 : 3, color: C.white, outline: C.navyD }, 'center');
     text(ctx, lv.boss ? 'BOSS!' : lv.subtitle, 640, 680, { size: 1, color: lv.boss ? '#ff8a7a' : C.ice }, 'center');
     if (ui.button(ctx, '<', 452, 640, 44, 44, { color: 'ice', size: 3, disabled: li <= 0 })) session.net.send({ t: 'pickLevel', id: LEVEL_ORDER[li - 1].id });

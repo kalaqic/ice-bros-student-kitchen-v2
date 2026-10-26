@@ -16,6 +16,14 @@ export function levelUnlocked(id: string, completed: string[]): boolean {
   const i = levelIndex(id);
   return i === 0 || (i > 0 && completed.includes(LEVEL_ORDER[i - 1].id));
 }
+/** "STAGE 2 - LEVEL 3" / "STAGE 2 - BOSS": position of a level inside its stage */
+export function levelLabel(id: string): string {
+  const L = LEVELS[id];
+  if (!L) return '';
+  if (L.boss) return `STAGE ${L.stage} - BOSS`;
+  const i = stageLevels(L.stage).filter((l) => !l.boss).findIndex((l) => l.id === id);
+  return `STAGE ${L.stage} - LEVEL ${i + 1}`;
+}
 export function completedStages(completed: string[]): number[] {
   return [1, 2, 3, 4].filter((n) => { const ls = stageLevels(n); return ls.length > 0 && completed.includes(ls[ls.length - 1].id); });
 }

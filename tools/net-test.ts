@@ -144,6 +144,12 @@ T.ws.close();
 send(S, { t: 'ready', v: true });
 await sleep(300);
 check(S.msgs.some((m) => m.t === 'level') && !S.snap!.paused, 'solo: READY alone starts the level (not paused)');
+const t0 = S.snap!.time;
+send(S, { t: 'pause', v: true }); await sleep(400);
+const t1 = S.snap!.time; await sleep(500);
+check(!!S.snap!.paused && S.snap!.time === t1 && t1 >= t0, `ESC pause freezes the level clock (${S.snap!.paused})`);
+send(S, { t: 'pause', v: false }); await sleep(400);
+check(!S.snap!.paused && S.snap!.time > t1, 'closing the pause menu resumes the level');
 S.ws.close();
 
 console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
