@@ -33,7 +33,7 @@ session.net.on((m) => {
     case 'room': {
       const prevPhase = session.phase;
       session.players = m.players; session.phase = m.phase; session.levelId = m.levelId; session.code = m.code;
-      session.completed = m.completed; session.skills = m.skills;
+      session.completed = m.completed; session.skills = m.skills; session.solo = !!m.solo;
       Session.saveProgress(m.completed);
       if (m.phase === 'lobby' && !(game.scene instanceof LobbyScene)) game.go(new LobbyScene(app));
       else if (m.phase !== 'lobby' && prevPhase === 'lobby' && !(game.scene instanceof LevelScene)) game.go(new LevelScene(app));

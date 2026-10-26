@@ -105,10 +105,10 @@ wss.on('connection', (ws) => {
       case 'create': {
         if (me) return;
         const role = isRole(m.role) ? m.role : 'david';
-        room = new Room(makeCode());
+        room = new Room(makeCode(), m.solo === true);
         rooms.set(room.code, room);
         me = room.addPlayer(ws, role, m.progress);
-        log(`room ${room.code} created by ${role}`);
+        log(`room ${room.code} created by ${role}${room.solo ? ' (SOLO)' : ''}`);
         return;
       }
       case 'join': {
@@ -124,6 +124,7 @@ wss.on('connection', (ws) => {
             if (p) { room = r; me = p; log(`room ${r.code}: ${p.role} reclaimed slot`); return; }
           }
         }
+        if (r.solo) return sendRaw(ws, { t: 'error', msg: 'TO JE SOLO IGRA' });
         if (r.full) return sendRaw(ws, { t: 'error', msg: 'SOBA JE PUNA (MAX 2)' });
         if (r.phase !== 'lobby') return sendRaw(ws, { t: 'error', msg: 'IGRA JE VEC POCELA' });
         room = r; me = r.addPlayer(ws, isRole(m.role) ? m.role : 'nemanja', m.progress);

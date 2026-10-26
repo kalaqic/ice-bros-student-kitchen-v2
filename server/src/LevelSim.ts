@@ -74,7 +74,7 @@ export class LevelSim {
   private sayCooldown = new Map<string, number>();
   private ids = 1;
 
-  constructor(readonly level: LevelDef, readonly players: Player[], public skills: SkillId[] = ['ice', 'coffee', 'camera', 'patience']) {
+  constructor(readonly level: LevelDef, readonly players: Player[], public skills: SkillId[] = ['ice', 'coffee', 'camera', 'patience'], readonly solo = false) {
     this.cols = levelCols(level);
     this.rows = levelRows(level);
     this.ice = new Uint8Array(this.cols * this.rows);
@@ -83,6 +83,10 @@ export class LevelSim {
   }
 
   has(s: SkillId) { return this.skills.includes(s); }
+  /** players needed at the exit (solo: just you) */
+  get need() { return this.solo ? 1 : 2; }
+  /** everybody is knocked out -> level fails and restarts (solo: your KO is enough) */
+  allDown() { return this.players.length === this.need && this.players.every((p) => p.ko); }
   nextId() { return this.ids++; }
 
   reset() {
@@ -102,7 +106,8 @@ export class LevelSim {
     }
     this.gateOpen = !L.map.some((r) => r.includes('G')) || this.stations.length === 0;
     this.projectiles = []; this.hazards = [];
-    this.boss = L.boss ? makeBoss(this, L.boss.type, L.boss.hp) : null;
+    // solo: one camera / one pair of hands -> bosses have ~30% less HP
+    this.boss = L.boss ? makeBoss(this, L.boss.type, this.solo ? Math.ceil(L.boss.hp * 0.7) : L.boss.hp) : null;
     this.coffeeRespawnAt = 20000;
     this.exitOpen = false;
     this.failAt = 0;
@@ -310,7 +315,7 @@ export class LevelSim {
     });
     if (best < 0) return;
     const s = this.stations[best];
-    if (s.role && s.role !== p.role) {
+    if (s.role && s.role !== p.role && !this.solo) {
       this.say(p, s.role === 'david' ? 'TO JE DAVIDOV KOD. NE DIRAM.' : 'TO JE NEMANJINA ARKADA.', 'st' + best, 2500);
       return;
     }
@@ -418,19 +423,19 @@ export class LevelSim {
       if (this.boss.dead && this.now >= this.boss.deadAt + 3200) {
         this.completed = true; this.stats.timeMs = this.now; return true;
       }
-      if (this.players.length === 2 && this.players.every((p) => p.ko)) { this.failAt = this.now + 2600; this.events.push({ k: 'fail' }); }
+      if (this.allDown()) { this.failAt = this.now + 2600; this.events.push({ k: 'fail' }); }
       return false;
     }
     // exit / completion
     const taken = this.items.filter((i) => i.taken).length;
     const tasksOk = !this.tasksGateExit || this.stations.every((s) => s.done);
     if (!this.exitOpen && taken === this.items.length && tasksOk) { this.exitOpen = true; this.events.push({ k: 'exitOpen' }); }
-    if (this.exitOpen && this.players.length === 2 && this.players.every((p) => !p.ko && tileOf(p.y) === 0)) {
+    if (this.exitOpen && this.players.length === this.need && this.players.every((p) => !p.ko && tileOf(p.y) === 0)) {
       this.completed = true;
       this.stats.timeMs = this.now;
       return true;
     }
-    if (this.players.length === 2 && this.players.every((p) => p.ko)) {
+    if (this.allDown()) {
       this.failAt = this.now + 2600;
       this.events.push({ k: 'fail' });
     }
@@ -471,7 +476,7 @@ export class LevelSim {
       const it = this.items[i];
       if (it.taken || Math.hypot(tileCenter(it.tx) - p.x, tileCenter(it.ty) - p.y) > PICKUP_RANGE) continue;
       const owner = ITEM_OWNER[it.kind];
-      if (owner === 'both' || owner === p.role) {
+      if (owner === 'both' || owner === p.role || this.solo) {
         it.taken = true; it.by = p.id; p.collected++;
         this.stats.perPlayer[p.role].food++;
         this.events.push({ k: 'collect', item: i, by: p.id, text: Math.random() < 0.35 ? pick(COLLECT_LINES[p.role]) : undefined });

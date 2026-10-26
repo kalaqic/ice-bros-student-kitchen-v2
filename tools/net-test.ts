@@ -131,6 +131,20 @@ await sleep(250);
 check(JSON.stringify(lastRoom(H)?.skills) === '["ice","coffee"]', `progress merges on join -> ${JSON.stringify(lastRoom(H)?.skills)}`);
 check(lastRoom(H)?.completed.length === 3, 'room knows the completed levels');
 for (const b of [A2, B, F, G, H, I]) b.ws.close();
+// ---------------- solo room
+const S = await bot();
+send(S, { t: 'create', role: 'nemanja', progress: [], solo: true });
+await sleep(200);
+check(lastRoom(S)?.solo === true && S.role === 'nemanja', 'solo room created');
+const T = await bot();
+send(T, { t: 'join', code: S.code, role: 'david' });
+await sleep(200);
+check(T.msgs.some((m) => m.t === 'error'), 'nobody can join a solo room');
+T.ws.close();
+send(S, { t: 'ready', v: true });
+await sleep(300);
+check(S.msgs.some((m) => m.t === 'level') && !S.snap!.paused, 'solo: READY alone starts the level (not paused)');
+S.ws.close();
 
 console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);

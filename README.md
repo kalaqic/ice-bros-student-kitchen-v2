@@ -25,6 +25,14 @@ npm run dev        # http://localhost:2567
 
 `PORT` env promenljiva menja port (`PORT=10000 npm start`).
 
+### Solo (jedan igrač)
+
+U meniju izaberi lika pa klikni **SOLO**. Dobiješ svoju sobu (niko ne može da uđe) i igra kreće čim klikneš **READY**. U solo modu:
+* skupljaš **svu hranu** (i svoju i od drugog lika) i radiš **sve zadatke** sam (i Davidov KOD i Nemanjinu ARKADU), uz svoje afinitete;
+* za izlaz je dovoljan samo ti; ako padneš (0 srca), nivo se restartuje jer nema ko da te podigne;
+* bosovi imaju ~30% manje HP-a;
+* napredak i veštine su isti kao u co-opu (čuvaju se u istom browseru).
+
 ### Igranje sa dva računara
 
 * **Ista mreža (LAN):** pokreni server na jednom računaru, drugi otvara `http://<IP-tog-racunara>:2567`.
@@ -165,8 +173,8 @@ npm test                     # 57 testova pravila: progresija, zaključane vešt
                              # šteta bosu po daljini, afiniteti, strpljenje (zadaci + revive), deca + kviz, led/slop, bosovi, dug/lock
 
 # sa pokrenutim serverom:
-npm start &  npm run test:net                         # 2 bota: soba, sync, led, cooldown, pauza/resume, zaključane veštine, spajanje napretka
-ICEBROS_PEACEFUL=1 ICEBROS_DEBUG=1 npm start &  npm run test:playthrough   # 2 bota prelaze svih 11 normalnih nivoa (zadaci sa Q, kviz dece, kapije, izlaz)
+npm start &  npm run test:net                         # 2 bota: soba, sync, led, cooldown, pauza/resume, zaključane veštine, spajanje napretka, solo soba
+ICEBROS_PEACEFUL=1 ICEBROS_DEBUG=1 npm start &  npm run test:playthrough   # 2 bota prelaze svih 11 normalnih nivoa (zadaci sa Q, kviz dece, kapije, izlaz); SOLO=1 = jedan bot sam
 ```
 
 `ICEBROS_DEBUG=1 npm start` uključuje dev komande iz browser konzole: `__net.send({t:'debug', cmd:'collectAll' | 'hurt' | 'ko' | 'stations' | 'toStation' | 'toExit' | 'killAll' | 'nearBoss' | 'bossLow' | 'bossKill' | 'unlockAll' | 'resetProgress'})`.

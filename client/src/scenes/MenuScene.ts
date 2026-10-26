@@ -45,10 +45,10 @@ export class MenuScene implements Scene {
     try { localStorage.setItem('icebros.role', r); } catch { /* ignore */ }
   }
 
-  private async create() {
+  private async create(solo = false) {
     const s = this.app.session;
-    this.mode = 'busy'; this.status = 'PRAVIM SOBU...'; s.error = '';
-    try { await s.net.connect(); s.net.send({ t: 'create', role: s.wantedRole, progress: Session.loadProgress() }); }
+    this.mode = 'busy'; this.status = solo ? 'POKRECEM SOLO IGRU...' : 'PRAVIM SOBU...'; s.error = '';
+    try { await s.net.connect(); s.net.send({ t: 'create', role: s.wantedRole, progress: Session.loadProgress(), solo }); }
     catch { this.mode = 'main'; this.status = 'SERVER NIJE DOSTUPAN'; }
   }
 
@@ -136,8 +136,9 @@ export class MenuScene implements Scene {
 
     // actions
     if (this.mode === 'main') {
-      if (ui.button(ctx, 'CREATE ROOM', 340, 598, 280, 62, { color: 'gold' })) void this.create();
-      if (ui.button(ctx, 'JOIN ROOM', 660, 598, 280, 62, { color: 'ice' })) { this.mode = 'join'; this.status = ''; }
+      if (ui.button(ctx, 'CREATE ROOM', 230, 598, 260, 62, { color: 'gold', size: 2 })) void this.create();
+      if (ui.button(ctx, 'JOIN ROOM', 510, 598, 260, 62, { color: 'ice', size: 2 })) { this.mode = 'join'; this.status = ''; }
+      if (ui.button(ctx, 'SOLO', 790, 598, 260, 62, { color: 'green', size: 2 })) void this.create(true);
     } else if (this.mode === 'join') {
       panel(ctx, 300, 590, 330, 76, 'ice');
       text(ctx, 'KOD SOBE', 318, 604, { size: 1, color: C.navy });

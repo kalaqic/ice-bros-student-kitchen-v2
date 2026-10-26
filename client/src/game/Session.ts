@@ -16,6 +16,8 @@ export class Session {
   /** shared room progress (synchronised by the server) */
   completed: string[] = [];
   skills: SkillId[] = ['ice'];
+  /** solo room: you collect all food and do every task alone */
+  solo = false;
   complete: CompleteStats | null = null;
   wantedRole: Role = 'david';
   error = '';
@@ -41,6 +43,6 @@ export class Session {
     Net.save(null);
     Net.forget(this.code);
     try { history.replaceState(null, '', location.pathname); } catch { /* ignore */ }
-    this.code = ''; this.me = null; this.players = []; this.phase = 'lobby'; this.complete = null;
+    this.code = ''; this.me = null; this.players = []; this.phase = 'lobby'; this.complete = null; this.solo = false;
   }
 }

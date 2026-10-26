@@ -339,5 +339,37 @@ console.log('--- boss BRANKA');
   check(done, 'defeating the boss completes the level');
 }
 
+// ================================================================ solo mode
+console.log('--- solo');
+{
+  const d = new Player('d', 't', 'david');
+  const sim = new LevelSim(LEVELS.level1, [d], ALL, true);
+  park(sim); ticks(sim, 30);
+  const it = sim.items.findIndex((i) => i.kind === 'pizza');
+  d.x = tileCenter(sim.items[it].tx); d.y = tileCenter(sim.items[it].ty); ticks(sim, 2);
+  check(sim.items[it].taken, "solo: David can pick up Nemanja's food");
+  const iA = sim.stations.findIndex((q) => q.role === 'nemanja');
+  d.x = tileCenter(sim.stations[iA].tx); d.y = tileCenter(sim.stations[iA].ty) + TILE;
+  sim.actInteract(d);
+  check(d.task === iA, "solo: David can do Nemanja's arcade task");
+  sim.items.forEach((q) => { q.taken = true; }); sim.stations.forEach((q) => { q.done = true; }); sim.gateOpen = true;
+  ticks(sim, 2);
+  check(sim.exitOpen, 'solo: exit opens');
+  const ex = sim.level.map[0].indexOf('E');
+  d.x = tileCenter(ex); d.y = tileCenter(0) + 4;
+  let done = false; for (let k = 0; k < 5 && !done; k++) done = sim.tick();
+  check(done, 'solo: one player at the exit completes the level');
+  const s2 = new LevelSim(LEVELS.level1, [new Player('x', 't', 'nemanja')], ALL, true);
+  park(s2); ticks(s2, 30); s2.players[0].invulnUntil = 0; s2.players[0].hp = 1;
+  s2.hurt(s2.players[0], 0, 0); ticks(s2, 1);
+  check(s2.events.some((e) => e.k === 'fail'), 'solo: getting knocked out restarts the level');
+  const sb = new LevelSim(LEVELS.boss_branka, [new Player('y', 't', 'david')], ALL, true);
+  check(sb.boss!.hp === Math.ceil(LEVELS.boss_branka.boss!.hp * 0.7), `solo: boss has 30% less HP (${sb.boss!.hp})`);
+  const co = mk('level1');
+  const pz = co.sim.items.findIndex((i) => i.kind === 'pizza');
+  co.d.x = tileCenter(co.sim.items[pz].tx); co.d.y = tileCenter(co.sim.items[pz].ty); ticks(co.sim, 2);
+  check(!co.sim.items[pz].taken, 'co-op unchanged: David still refuses pizza');
+}
+
 console.log(fails ? `\n${fails} FAILED` : '\nSIM RULES PASSED');
 process.exit(fails ? 1 : 0);

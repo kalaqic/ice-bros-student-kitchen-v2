@@ -126,14 +126,15 @@ export class LobbyScene implements Scene {
       ctx.fillStyle = !p ? '#55607a' : p.connected ? C.green : C.orange;
       ctx.fillRect(40, y + 12, 8, 8);
       text(ctx, roleName(r), 58, y + 9, { size: 2, color: p ? C.white : '#7f8aa6' });
-      const status = !p ? 'CEKA SE...' : !p.connected ? 'OFFLINE' : p.ready ? 'READY' : 'NIJE READY';
+      const status = !p ? (session.solo ? 'SOLO - NEMA GA' : 'CEKA SE...') : !p.connected ? 'OFFLINE' : p.ready ? 'READY' : 'NIJE READY';
       const col = !p ? '#7f8aa6' : p.ready ? C.green : C.iceL;
       text(ctx, status, 288, y + 12, { size: 1, color: col }, 'right');
       if (p && p.id === session.me?.id) text(ctx, '(TI)', 58 + (r === 'david' ? 84 : 112), y + 12, { size: 1, color: C.gold });
     });
 
     // ---- top-right buttons
-    if (ui.button(ctx, this.copied > 0 ? 'KOPIRANO!' : 'KOPIRAJ LINK', 1000, 18, 264, 46, { color: 'ice', size: 2 })) {
+    if (session.solo) { pixRect(ctx, 1000, 18, 264, 46, 'rgba(11,20,40,0.72)', 4); text(ctx, 'SOLO MOD', 1132, 30, { size: 3, color: C.green, outline: C.navyD }, 'center'); }
+    else if (ui.button(ctx, this.copied > 0 ? 'KOPIRANO!' : 'KOPIRAJ LINK', 1000, 18, 264, 46, { color: 'ice', size: 2 })) {
       const url = `${location.origin}${location.pathname}?room=${session.code}`;
       navigator.clipboard?.writeText(url).catch(() => {});
       this.copied = 1.6;
@@ -143,10 +144,11 @@ export class LobbyScene implements Scene {
     if (ui.button(ctx, 'VESTINE', 1136, 126, 128, 40, { color: 'navy', size: 1 })) this.app.skillsScreen();
 
     // ---- status banner over the fence
-    const both = session.players.length === 2 && session.players.every((p) => p.connected);
+    const both = session.players.length === (session.solo ? 1 : 2) && session.players.every((p) => p.connected);
     const other = session.players.find((p) => p.id !== session.me?.id);
     let msg: string;
-    if (!both) msg = other && !other.connected ? `${roleName(other.role)} SE DISKONEKTOVAO...` : `CEKAMO ${session.me?.role === 'david' ? 'NEMANJU' : 'DAVIDA'}... POSALJI MU KOD ${session.code}`;
+    if (session.solo) msg = this.myReady() ? 'KRECEMO!' : 'SOLO: SVU HRANU I SVE ZADATKE RADIS SAM. KLIKNI READY';
+    else if (!both) msg = other && !other.connected ? `${roleName(other.role)} SE DISKONEKTOVAO...` : `CEKAMO ${session.me?.role === 'david' ? 'NEMANJU' : 'DAVIDA'}... POSALJI MU KOD ${session.code}`;
     else if (this.myReady()) msg = other?.ready ? 'KRECEMO!' : `CEKAMO DA ${roleName(other!.role)} KLIKNE READY`;
     else msg = 'OBOJICA SU TU! KLIKNI READY';
     const bw = Math.min(900, msg.length * 12 + 60);

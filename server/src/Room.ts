@@ -25,9 +25,12 @@ export class Room {
   lobbyEvents: GameEvent[] = [];
   emptySince = 0;
 
-  constructor(readonly code: string) {}
+  /** solo room: one player does everything (all food, every task) */
+  constructor(readonly code: string, readonly solo = false) {}
 
-  get full() { return this.players.length >= 2; }
+  /** players needed to start / finish a level */
+  get need() { return this.solo ? 1 : 2; }
+  get full() { return this.players.length >= this.need; }
 
   /** merge saved progress from a joining browser (only known level ids) */
   mergeProgress(list: unknown) {
@@ -86,7 +89,7 @@ export class Room {
     if (this.phase !== 'lobby') return;
     p.ready = !!v;
     this.broadcastRoom();
-    if (this.players.length === 2 && this.players.every((q) => q.ready && q.connected)) this.startLevel();
+    if (this.players.length === this.need && this.players.every((q) => q.ready && q.connected)) this.startLevel();
   }
 
   onAct(p: Player, a: string) {
@@ -137,7 +140,7 @@ export class Room {
 
   startLevel() {
     this.phase = 'level';
-    this.sim = new LevelSim(LEVELS[this.levelId], this.players, this.skills);
+    this.sim = new LevelSim(LEVELS[this.levelId], this.players, this.skills, this.solo);
     for (const p of this.players) { p.inputs = []; p.lastIvSent = -1; }
     this.broadcast({ t: 'level', levelId: this.levelId, seed: 0 });
     this.broadcastRoom();
@@ -185,7 +188,7 @@ export class Room {
     if (this.phase !== 'level') return null;
     const gone = this.players.find((p) => !p.connected);
     if (gone) return `${roleName(gone.role)} SE DISKONEKTOVAO...`;
-    if (this.players.length < 2) return 'CEKAM DRUGOG IGRACA';
+    if (this.players.length < this.need) return 'CEKAM DRUGOG IGRACA';
     return null;
   }
 
@@ -260,7 +263,7 @@ export class Room {
   broadcast(msg: ServerMsg) { for (const p of this.players) this.send(p, msg); }
   broadcastRoom() {
     this.broadcast({
-      t: 'room', code: this.code, phase: this.phase, levelId: this.levelId, completed: this.completed, skills: this.skills,
+      t: 'room', code: this.code, phase: this.phase, levelId: this.levelId, completed: this.completed, skills: this.skills, solo: this.solo,
       players: this.players.map((p) => ({ id: p.id, role: p.role, connected: p.connected, ready: p.ready })),
     });
   }

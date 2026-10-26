@@ -91,20 +91,20 @@ function step(L: LevelDef, b: Bot) {
   if (dx || dy) send(b, { t: 'input', seq: ++b.seq, dx, dy });
 }
 
-function goalsFor(L: LevelDef, role: Role): Goal[] {
+function goalsFor(L: LevelDef, role: Role, solo = false): Goal[] {
   const out: Goal[] = [];
   let shared = 0;
   L.items.forEach((it, i) => {
     const o = ITEM_OWNER[it.kind];
-    if (o === role) out.push({ tx: it.tx, ty: it.ty, kind: 'item', idx: i });
-    if (o === 'both') { if ((shared++ % 2 === 0) === (role === 'david')) out.push({ tx: it.tx, ty: it.ty, kind: 'item', idx: i }); }
+    if (o === role || (solo && o !== 'both')) out.push({ tx: it.tx, ty: it.ty, kind: 'item', idx: i });
+    if (o === 'both') { if (solo || (shared++ % 2 === 0) === (role === 'david')) out.push({ tx: it.tx, ty: it.ty, kind: 'item', idx: i }); }
   });
   let si = 0;
   for (let ty = 0; ty < L.map.length; ty++) for (let tx = 0; tx < L.map[0].length; tx++) {
     const c = tileAt(L, tx, ty);
     if (STATION_CODES.includes(c)) {
       const role0 = TASKS[TASK_BY_CODE[c]].role;
-      if (role0 ? role0 === role : (si % 2 === 0) === (role === 'david')) {
+      if (solo || (role0 ? role0 === role : (si % 2 === 0) === (role === 'david'))) {
         const adj = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [tx + dx, ty + dy]).find(([x, y]) => tileAt(L, x, y) === '.')!;
         out.push({ tx: adj[0], ty: adj[1], kind: 'station', idx: si });
       }
@@ -140,8 +140,24 @@ async function run(L: LevelDef): Promise<boolean> {
   return ok && !wrong;
 }
 
+/** one bot plays the level alone in a SOLO room */
+async function runSolo(L: LevelDef): Promise<boolean> {
+  const a = await mk('nemanja');
+  send(a, { t: 'create', role: 'nemanja', progress: [], solo: true }); await sleep(150);
+  send(a, { t: 'debug', cmd: 'unlockAll' }); await sleep(80);
+  send(a, { t: 'pickLevel', id: L.id }); await sleep(80);
+  send(a, { t: 'ready', v: true }); await sleep(400);
+  a.goals = goalsFor(L, 'nemanja', true);
+  const t0 = Date.now();
+  while (Date.now() - t0 < 150_000 && !a.msgs.some((m) => m.t === 'complete')) { step(L, a); await sleep(33); }
+  const ok = a.msgs.some((m) => m.t === 'complete');
+  console.log(`${ok ? 'PASS' : 'FAIL'}  SOLO ${L.id.padEnd(14)} ${ok ? 'complete in ' + ((Date.now() - t0) / 1000).toFixed(1) + 's' : 'NOT complete'}  collected ${a.events.filter((e) => e.k === 'collect').length}/${L.items.length}, tasks ${a.events.filter((e) => e.k === 'station').length}`);
+  a.ws.close();
+  return ok;
+}
+
 const list = process.env.LEVEL ? [LEVELS[process.env.LEVEL]] : LEVEL_ORDER.filter((l) => !l.boss);
 let fails = 0;
-for (const L of list) if (!(await run(L))) fails++;
+for (const L of list) if (!(await (process.env.SOLO ? runSolo(L) : run(L)))) fails++;
 console.log(fails ? `\n${fails} LEVEL(S) FAILED` : '\nALL LEVELS PLAYABLE');
 process.exit(fails ? 1 : 0);

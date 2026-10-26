@@ -6,7 +6,7 @@ export type ActionId = 'ice' | 'coffee' | 'camera' | 'interact';
 
 // ---------- client -> server ----------
 export type ClientMsg =
-  | { t: 'create'; role: Role; progress?: string[] }
+  | { t: 'create'; role: Role; progress?: string[]; solo?: boolean }
   | { t: 'join'; code: string; role: Role; tokens?: string[]; progress?: string[] }
   | { t: 'resume'; code: string; token: string }
   | { t: 'input'; seq: number; dx: number; dy: number }
@@ -141,7 +141,7 @@ export interface CompleteStats {
 export type ServerMsg =
   | { t: 'joined'; code: string; you: { id: string; role: Role; token: string } }
   | { t: 'error'; msg: string }
-  | { t: 'room'; code: string; phase: Phase; levelId: string; completed: string[]; skills: SkillId[]; players: RoomPlayerInfo[] }
+  | { t: 'room'; code: string; phase: Phase; levelId: string; completed: string[]; skills: SkillId[]; players: RoomPlayerInfo[]; solo: boolean }
   | { t: 'level'; levelId: string; seed: number }
   | { t: 'complete'; stats: CompleteStats }
   | Snapshot

@@ -306,11 +306,11 @@ export class LevelScene implements Scene {
         a.play('gate');
         break;
       case 'exitOpen':
-        this.banner('IZLAZ OTVOREN!', 'OBOJICA NA VRATA GORE', '#7fe08a');
+        this.banner('IZLAZ OTVOREN!', this.app.session.solo ? 'IDI NA VRATA GORE' : 'OBOJICA NA VRATA GORE', '#7fe08a');
         a.play('exit');
         break;
       case 'emote': { const r = roleOf(ev.by); if (r) { this.view(r).doEmote(ev.e); a.play('emote'); } break; }
-      case 'fail': this.banner('OBOJICA SU PALI!', 'RESTART NIVOA...', C.red); a.play('ko'); break;
+      case 'fail': this.banner(this.app.session.solo ? 'PAO SI!' : 'OBOJICA SU PALI!', 'RESTART NIVOA...', C.red); a.play('ko'); break;
       case 'restart': this.restartVisuals(); break;
       case 'coffeeSpawn': {
         const c = this.level.coffee[ev.idx];
@@ -585,7 +585,7 @@ export class LevelScene implements Scene {
       if (!done && st.role) drawImageFit(ctx, img[st.role === 'david' ? 'portrait_david' : 'portrait_nemanja'], cx + lw / 2 + 14, by - 2, 24, 24);
       // hint for the local player
       if (me && !done && myRole && !me.ko && me.ti !== i && this.nearStation(this.pred.pos.x, this.pred.pos.y) === i) {
-        const ok = !st.role || st.role === myRole;
+        const ok = !st.role || st.role === myRole || this.app.session.solo;
         text(ctx, ok ? `[${keyLabel(bindings.code('interact'))}] RADI` : 'NIJE TVOJE', cx, cy + 26, { size: 1, color: ok ? C.gold : '#ff9a8e', outline: C.navyD }, 'center');
       }
     });
@@ -991,6 +991,22 @@ export class LevelScene implements Scene {
     }
   }
 
+  /** food counters for one character's items; returns the item kinds listed */
+  private foodList(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, role: Role, title: string): ItemKind[] {
+    text(ctx, title, x + 16, y, { size: 1, color: C.ice });
+    const kinds = [...new Set(this.level.items.filter((i) => ITEM_OWNER[i.kind] === role).map((i) => i.kind))];
+    kinds.forEach((k, r) => {
+      const ry = y + 18 + r * 38;
+      const tot = this.level.items.filter((i) => i.kind === k).length;
+      const got = this.level.items.filter((it, i) => it.kind === k && this.taken.has(i)).length;
+      pixRect(ctx, x + 14, ry, w - 28, 32, '#101c36', 3);
+      const key = ITEM_SPRITE[k];
+      if (spN(key)) drawFit(ctx, sp(key), key, x + 34, ry + 30, 28, 28); else drawImageFit(ctx, img[ITEM_IMG[k]], x + 34, ry + 16, 26, 26);
+      text(ctx, `${got}/${tot}`, x + w - 22, ry + 9, { size: 2, color: got === tot ? C.green : C.white }, 'right');
+    });
+    return kinds;
+  }
+
   private rolePanel(ctx: CanvasRenderingContext2D, role: Role, x: number) {
     const s = this.app.session;
     const p = this.snap?.p.find((q) => q.role === role);
@@ -1003,7 +1019,16 @@ export class LevelScene implements Scene {
     drawImageFit(ctx, img[role === 'david' ? 'portrait_david' : 'portrait_nemanja'], cx, y + 58, w - 40, 72);
     tag(ctx, roleName(role), cx, y + 102, 2, role === 'david' ? '#22408a' : '#1b1b22');
     if (mine) { pixRect(ctx, x + w - 40, y + 12, 30, 18, C.gold, 3); text(ctx, 'TI', x + w - 25, y + 15, { size: 2, color: C.ink }, 'center'); }
-    if (!p) { text(ctx, 'CEKA SE...', cx, y + 170, { size: 1, color: C.ice }, 'center'); return; }
+    if (!p) {
+      if (!s.solo) { text(ctx, 'CEKA SE...', cx, y + 170, { size: 1, color: C.ice }, 'center'); return; }
+      // solo: the partner's slot shows what YOU still have to pick up for him
+      ctx.fillStyle = 'rgba(11,20,40,0.55)'; ctx.fillRect(x + 14, y + 16, w - 28, 80);
+      text(ctx, 'SOLO MOD', cx, y + 150, { size: 2, color: C.green, outline: C.navyD }, 'center');
+      text(ctx, 'NJEGOVU HRANU I', cx, y + 190, { size: 1, color: C.iceL }, 'center');
+      text(ctx, 'ZADATKE RADIS TI', cx, y + 206, { size: 1, color: C.iceL }, 'center');
+      this.foodList(ctx, x, y + 326, w, role, 'ZA NJEGA');
+      return;
+    }
     for (let i = 0; i < MAX_HP; i++) {
       const hx = cx - 48 + i * 34, hy = y + 146;
       const full = i < p.hp;
@@ -1012,18 +1037,7 @@ export class LevelScene implements Scene {
     }
     this.skillRow(ctx, x, y + 190, w, 'coffee', p, mine);
     this.skillRow(ctx, x, y + 258, w, 'camera', p, mine);
-    // food for this player
-    text(ctx, 'MOJA HRANA', x + 16, y + 326, { size: 1, color: C.ice });
-    const kinds = [...new Set(this.level.items.filter((i) => ITEM_OWNER[i.kind] === role).map((i) => i.kind))];
-    kinds.forEach((k, r) => {
-      const ry = y + 344 + r * 38;
-      const tot = this.level.items.filter((i) => i.kind === k).length;
-      const got = this.level.items.filter((it, i) => it.kind === k && this.taken.has(i)).length;
-      pixRect(ctx, x + 14, ry, w - 28, 32, '#101c36', 3);
-      const key = ITEM_SPRITE[k];
-      if (spN(key)) drawFit(ctx, sp(key), key, x + 34, ry + 30, 28, 28); else drawImageFit(ctx, img[ITEM_IMG[k]], x + 34, ry + 16, 26, 26);
-      text(ctx, `${got}/${tot}`, x + w - 22, ry + 9, { size: 2, color: got === tot ? C.green : C.white }, 'right');
-    });
+    const kinds = this.foodList(ctx, x, y + 326, w, role, 'MOJA HRANA');
     if (!kinds.length && this.boss) text(ctx, '- BOSS -', cx, y + 350, { size: 1, color: '#7f8aa6' }, 'center');
     // patience badge
     if (s.has('patience')) {
@@ -1059,7 +1073,7 @@ export class LevelScene implements Scene {
       text(ctx, `STAGE ${stg.n}: ${stg.name}`, 0, -70, { size: 2, color: stg.color }, 'center');
       text(ctx, this.level.name, 0, -44, { size: 4, color: C.white, outline: C.navyD }, 'center');
       wrap(this.level.intro, 580, 1).forEach((l, i) => text(ctx, l, 0, 4 + i * 14, { size: 1, color: C.iceL }, 'center'));
-      text(ctx, 'PLAVI KRUG = DAVID   BELI = NEMANJA   ZLATNI = ZAJEDNO', 0, 44, { size: 1, color: C.ice }, 'center');
+      text(ctx, s.solo ? 'SOLO: SKUPLJAS SVU HRANU I RADIS SVE ZADATKE SAM' : 'PLAVI KRUG = DAVID   BELI = NEMANJA   ZLATNI = ZAJEDNO', 0, 44, { size: 1, color: s.solo ? C.green : C.ice }, 'center');
       const skills = (['ice', 'coffee', 'camera', 'patience'] as SkillId[]).filter((id) => s.has(id)).map((id) => SKILLS[id].name).join(' + ');
       text(ctx, 'VESTINE: ' + skills, 0, 64, { size: 1, color: C.gold }, 'center');
       ctx.restore();
@@ -1116,8 +1130,9 @@ export class LevelScene implements Scene {
     const cols = ['HRANA', 'LED', 'BLIC', 'KAFA', 'UDARCI'];
     const keys = ['food', 'ice', 'flashes', 'coffee', 'hits'] as const;
     cols.forEach((c, i) => text(ctx, c, x + 250 + i * 82, y + 122, { size: 1, color: C.ice }, 'center'));
-    (['david', 'nemanja'] as Role[]).forEach((r, row) => {
-      const ry = y + 142 + row * 48;
+    const played: Role[] = s.solo && s.me ? [s.me.role] : ['david', 'nemanja'];
+    played.forEach((r, row) => {
+      const ry = y + 142 + row * 48 + (played.length === 1 ? 24 : 0);
       pixRect(ctx, x + 30, ry, w - 60, 40, '#101c36', 3);
       drawImageFit(ctx, img[r === 'david' ? 'portrait_david' : 'portrait_nemanja'], x + 62, ry + 20, 44, 34);
       text(ctx, roleName(r), x + 92, ry + 13, { size: 2, color: C.white });
@@ -1126,6 +1141,7 @@ export class LevelScene implements Scene {
     const quote = st.unlocked ? `NOVA VESTINA: ${SKILLS[st.unlocked].name}!` : st.perPlayer.david.hits + st.perPlayer.nemanja.hits === 0 ? 'BEZ IJEDNOG UDARCA. LEGENDE.' : 'PREZIVELI STE!';
     text(ctx, quote, cx, y + 252, { size: 2, color: st.unlocked ? C.gold : '#7fe08a' }, 'center');
     (['david', 'nemanja'] as Role[]).forEach((r, i) => {
+      if (!played.includes(r)) return;
       ctx.fillStyle = 'rgba(143,208,245,0.25)';
       ctx.beginPath(); ctx.ellipse(i === 0 ? x - 95 : x + w + 95, y + 392, 70, 14, 0, 0, Math.PI * 2); ctx.fill();
       drawChar(ctx, r, 'win', Math.floor(this.t * 5 + i), i === 0 ? x - 95 : x + w + 95, y + 396, 1.3, i === 1);
