@@ -71,4 +71,12 @@ export function keyLabel(code: string): string {
   return map[code] ?? code.toUpperCase();
 }
 
+/** short label for the 4 movement keys: WASD, STRELICE, or the keys joined */
+export function moveLabel(): string {
+  const c = (['up', 'left', 'down', 'right'] as ActionKey[]).map((a) => bindings.code(a));
+  if (c.join() === 'ArrowUp,ArrowLeft,ArrowDown,ArrowRight') return 'STRELICE';
+  const l = c.map(keyLabel);
+  return l.every((x) => x.length === 1) ? l.join('') : l.join('/');
+}
+
 export const bindings = new Bindings();

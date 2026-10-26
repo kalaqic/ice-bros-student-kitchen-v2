@@ -47,7 +47,7 @@ export const STAGES: StageDef[] = [
     n: 3, name: 'DRPD', subtitle: 'UCI DECU. NE DIRAJ DECU.', reward: 'patience', music: 'stage3', color: '#ff9fd0',
     roster: ['staff', 'super', 'kid1', 'kid2', 'kid1', 'kid2'],
     skin: {
-      floors: ['s3_floor_0', 's3_floor_1'], walls: ['s3_wall_0', 's3_wall_1'],
+      floors: ['s3_floor_0'], walls: ['s3_wall_0'], // one clean tile each (the DRPD logo wall gets cut in a 48px cell)
       props: { T: ['s3_kiddesk', 's3_kiddesk2'], C: ['s3_helper'], H: ['s3_bookshelf'], W: ['s3_toyshelf'], F: ['s3_lockers'], K: ['s3_toyshelf'], S: ['s3_bookshelf'] },
       backdrop: 'bg_s3',
     },

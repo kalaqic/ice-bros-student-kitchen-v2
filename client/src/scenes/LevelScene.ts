@@ -1,5 +1,5 @@
 import { drawChar, drawFit, img, sp, spN, type ImageKey, BOSS_ANIMS, type BossAnim } from '../engine/assets.ts';
-import { bindings, keyLabel } from '../engine/bindings.ts';
+import { bindings, keyLabel, moveLabel } from '../engine/bindings.ts';
 import { measure, text, wrap } from '../engine/font.ts';
 import { Fx, drawStar, ease } from '../engine/fx.ts';
 import type { Overlay, Scene } from '../engine/Game.ts';
@@ -958,7 +958,7 @@ export class LevelScene implements Scene {
     this.rolePanel(ctx, 'nemanja', 1280 - 6 - 148);
     // controls strip from the current bindings (only unlocked skills)
     const k = (a: Parameters<typeof bindings.code>[0]) => keyLabel(bindings.code(a));
-    const parts = [`${k('up')}${k('left')}${k('down')}${k('right')} HODAJ`, `${k('ice')} LED`];
+    const parts = [`${moveLabel()} HODAJ`, `${k('ice')} LED`];
     if (s.has('coffee')) parts.push(`${k('coffee')} KAFA`);
     if (s.has('camera')) parts.push(`${k('camera')} KAMERA`);
     parts.push(`${k('interact')} ZADATAK`, `${k('pause')} PAUZA`, '1-6 EMOTE');

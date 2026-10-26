@@ -11,7 +11,7 @@ import { roleName, type Role } from '../../../shared/types.ts';
 import { drawLobbyBg } from './common.ts';
 import { LEVEL_ORDER, levelIndex, levelLabel, levelUnlocked } from '../../../shared/levels/index.ts';
 import { stageDef } from '../../../shared/stages.ts';
-import { bindings, keyLabel } from '../engine/bindings.ts';
+import { bindings, keyLabel, moveLabel } from '../engine/bindings.ts';
 
 /** Playable waiting lobby on top of assets/snowy_lobby.png. */
 export class LobbyScene implements Scene {
@@ -172,7 +172,7 @@ export class LobbyScene implements Scene {
     // ---- bottom: controls + READY
     panel(ctx, 14, 626, 404, 82, 'dark');
     const k = (a: Parameters<typeof bindings.code>[0]) => keyLabel(bindings.code(a));
-    text(ctx, `${k('up')}${k('left')}${k('down')}${k('right')}  HODAJ PO LOBIJU`, 34, 644, { size: 2, color: C.iceL });
+    text(ctx, `${moveLabel()}  HODAJ PO LOBIJU`, 34, 644, { size: 2, color: C.iceL });
     text(ctx, '1-6   EMOTE: ' + EMOTES.slice(0, 3).join(' '), 34, 668, { size: 1, color: C.ice });
     text(ctx, `R  READY   ${keyLabel(bindings.code('pause'))}  PODESAVANJA`, 34, 686, { size: 1, color: C.ice });
     const ready = this.myReady();
