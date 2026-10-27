@@ -187,6 +187,8 @@ Originali iz `assets/` se ne menjaju. `npm run assets` (python3 + pillow, numpy,
 
 * `tools/extract_stages.py` — sve za 4 stagea iz sheetova u `assets/` (animacije zadataka David laptop / Nemanja slušalice+džojstik, neprijatelji, bosovi, projektili, efekti, pločice i nameštaj po stageu, pozadine) u `assets/runtime/stage/` + `manifest.json`. Klijent učitava po ključu iz manifesta; ako neki ključ fali, crta jasan privremeni placeholder (ne menja logiku), pa se novi crtež samo ubaci i ponovo pokrene skripta.
 
+* `tools/extract_run.py` — trčanje u 4 pravca iz `running-better.png` (8 frejmova; levo ima 9) za oba lika, koristi se u nivou i u lobiju. Na sheetu je „RUN DOWN“ nacrtan s leđa, a „RUN UP“ spreda, pa su upareni po izgledu (s leđa = ide gore).
+
 `assets/concept_art_ref.png` je kopija `concept art.png` (bez razmaka u imenu, za skripte).
 
 ---

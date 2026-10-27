@@ -703,6 +703,46 @@
 "n": 1,
 "w": 62
 },
+"run_david_down": {
+"h": 75,
+"n": 8,
+"w": 42
+},
+"run_david_left": {
+"h": 70,
+"n": 9,
+"w": 52
+},
+"run_david_right": {
+"h": 70,
+"n": 8,
+"w": 58
+},
+"run_david_up": {
+"h": 75,
+"n": 8,
+"w": 42
+},
+"run_nemanja_down": {
+"h": 78,
+"n": 8,
+"w": 42
+},
+"run_nemanja_left": {
+"h": 70,
+"n": 9,
+"w": 50
+},
+"run_nemanja_right": {
+"h": 70,
+"n": 8,
+"w": 56
+},
+"run_nemanja_up": {
+"h": 78,
+"n": 8,
+"w": 44
+},
 "runner_attack": {
 "h": 65,
 "n": 2,

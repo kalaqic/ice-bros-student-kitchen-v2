@@ -8,6 +8,10 @@ import { wrap } from '../engine/font.ts';
 import { roleName, type Dir, type Role } from '../../../shared/types.ts';
 
 export const CHAR_SCALE = 0.56;
+/** facing (0 right, 1 down, 2 left, 3 up) -> run animation key suffix */
+const RUN_DIR = ['right', 'down', 'left', 'up'] as const;
+/** visible height of the idle frames in the hero strips (px before scaling) */
+const RUN_TARGET_H = 119;
 const FEET = 10; // px below the hitbox centre where the sprite's feet touch the floor
 
 export interface CharState {
@@ -124,6 +128,7 @@ export class CharacterView {
     ctx.beginPath(); ctx.ellipse(x, y + FEET - 1, (this.st.ko ? 34 : 19) * s / CHAR_SCALE, 6, 0, 0, Math.PI * 2); ctx.fill();
 
     if (this.task && !this.st.ko && this.drawTask(ctx, x, y)) { this.drawOverhead(ctx, x, y, opts); return; }
+    if (this.drawRun(ctx, x, y)) { this.drawOverhead(ctx, x, y, opts); return; }
     const fi = this.frame();
     ctx.save();
     if (this.st.invuln && !this.st.ko && Math.floor(this.t * 14) % 2 === 0) ctx.globalAlpha = 0.35;
@@ -140,6 +145,29 @@ export class CharacterView {
     ctx.imageSmoothingEnabled = false;
 
     this.drawOverhead(ctx, x, y, opts);
+  }
+
+  /**
+   * 4-direction run cycle from assets/running-better.png (run_<role>_<right|left|down|up>, 8-9 frames).
+   * Used whenever the character simply moves; returns false (-> old strip) if the art is missing.
+   */
+  private drawRun(ctx: CanvasRenderingContext2D, x: number, y: number): boolean {
+    if (!this.st.moving || this.st.ko || this.st.win || this.st.drinking || this.action) return false;
+    const key = `run_${this.role}_${RUN_DIR[this.facing]}`;
+    const n = spN(key);
+    if (!n) return false;
+    const fps = this.moveAnim === 'run' ? 14 : 10;
+    const im = sp(key, Math.floor(this.t * fps) % n);
+    if (!im) return false;
+    // same on-screen height as the idle strip (119 px tall at CHAR_SCALE)
+    const k = (RUN_TARGET_H * this.scale) / (im.height - 2);
+    ctx.save();
+    if (this.st.invuln && Math.floor(this.t * 14) % 2 === 0) ctx.globalAlpha = 0.35;
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(im, x - (im.width * k) / 2, y + FEET + 2 - im.height * k, im.width * k, im.height * k);
+    ctx.restore();
+    ctx.imageSmoothingEnabled = false;
+    return true;
   }
 
   /** task frames (laptop coding / headphones gaming); returns false if the art is missing */
