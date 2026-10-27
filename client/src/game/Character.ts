@@ -1,3 +1,4 @@
+import { DEFAULT_EMOTES } from '../../../shared/emotes.ts';
 import { CHAR, charImage, sp, spN, type CharAnim } from '../engine/assets.ts';
 import type { TaskAnim } from '../../../shared/tasks.ts';
 import { drawStar } from '../engine/fx.ts';
@@ -49,7 +50,7 @@ export class CharacterView {
   get working() { return !!this.task; }
   private drinkT = 0;
   private say: { lines: string[]; t: number; color: string } | null = null;
-  private emote: { e: number; t: number } | null = null;
+  private emote: { e: number; t: number; text?: string } | null = null;
   private stepT = 0;
   /** one-shot action animation (camera photo / ice shot) */
   private action: { anim: CharAnim; t: number; dur: number } | null = null;
@@ -72,7 +73,7 @@ export class CharacterView {
   }
 
   speak(textStr: string, color: string = C.ink, dur = 2.4) { this.say = { lines: wrap(textStr, 240), t: dur, color }; }
-  doEmote(e: number) { this.emote = { e, t: 1.8 }; }
+  doEmote(e: number, text?: string) { this.emote = { e, t: 1.8, text }; }
 
   /** returns true on footstep frames (for sfx/dust) */
   update(dt: number): boolean {
@@ -213,19 +214,19 @@ export class CharacterView {
       ctx.fillRect(x - 4, by - 1, 8, 3); ctx.fillRect(x - 2, by + 2, 4, 3);
     }
     const lift = opts.name ? 26 : 0;
-    if (this.emote) drawEmote(ctx, this.emote.e, x, headY - 6 - lift, this.emote.t);
+    if (this.emote) drawEmote(ctx, this.emote.text ?? EMOTES[this.emote.e] ?? '!', x, headY - 6 - lift, this.emote.t);
     if (this.say) bubble(ctx, this.say.lines, x, headY - 4 - lift - (this.emote ? 34 : 0), Math.min(1, this.say.t * 3), this.say.color);
   }
 }
 
-export const EMOTES = ['A U KURAC!', 'GG', 'KOSOVO JE SRBIJA!', 'HAHA', '👍👍', 'STUDENTI POBEDJUJU!'];
+export const EMOTES = DEFAULT_EMOTES;
 export const EMOTE_KEYS = EMOTES.map((_, i) => 'Digit' + (i + 1));
-function drawEmote(ctx: CanvasRenderingContext2D, e: number, x: number, bottom: number, t: number) {
+function drawEmote(ctx: CanvasRenderingContext2D, label: string, x: number, bottom: number, t: number) {
   const pop = Math.min(1, (1.8 - t) * 8);
   ctx.save();
   ctx.globalAlpha = Math.min(1, t * 3);
   ctx.translate(x, bottom - 18);
   ctx.scale(pop, pop);
-  bubble(ctx, [EMOTES[e] ?? '!'], 0, 18, 1, C.ink, C.gold);
+  bubble(ctx, [label], 0, 18, 1, C.ink, C.gold);
   ctx.restore();
 }

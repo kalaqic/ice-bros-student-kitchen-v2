@@ -88,7 +88,8 @@ function step(L: LevelDef, b: Bot) {
   const ddx = tx - me.x, ddy = ty - me.y;
   let dx = Math.abs(ddx) > 3.5 ? Math.sign(ddx) : 0, dy = Math.abs(ddy) > 3.5 ? Math.sign(ddy) : 0;
   if (dx && dy) { if (Math.abs(ddx) > Math.abs(ddy)) dy = 0; else dx = 0; }
-  if (dx || dy) send(b, { t: 'input', seq: ++b.seq, dx, dy });
+  if (process.env.DBG === b.role && Math.random() < 0.02) console.log("dbg", b.role, mt, g.kind, g.tx, g.ty, "next", nx, ny, "d", dx, dy, me.x, me.y);
+  if (dx || dy) send(b, { t: "input", seq: ++b.seq, dx, dy });
 }
 
 function goalsFor(L: LevelDef, role: Role, solo = false): Goal[] {
@@ -99,13 +100,26 @@ function goalsFor(L: LevelDef, role: Role, solo = false): Goal[] {
     if (o === role || (solo && o !== 'both')) out.push({ tx: it.tx, ty: it.ty, kind: 'item', idx: i });
     if (o === 'both') { if (solo || (shared++ % 2 === 0) === (role === 'david')) out.push({ tx: it.tx, ty: it.ty, kind: 'item', idx: i }); }
   });
+  // tiles reachable while the gates are still closed (a station must be worked from one of these)
+  const cols = L.map[0].length;
+  const pre = new Set<number>([L.spawns[role].ty * cols + L.spawns[role].tx]);
+  const q: [number, number][] = [[L.spawns[role].tx, L.spawns[role].ty]];
+  while (q.length) {
+    const [x, y] = q.shift()!;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (pre.has(ny * cols + nx) || tileAt(L, nx, ny) !== '.') continue;
+      pre.add(ny * cols + nx); q.push([nx, ny]);
+    }
+  }
   let si = 0;
   for (let ty = 0; ty < L.map.length; ty++) for (let tx = 0; tx < L.map[0].length; tx++) {
     const c = tileAt(L, tx, ty);
     if (STATION_CODES.includes(c)) {
       const role0 = TASKS[TASK_BY_CODE[c]].role;
       if (solo || (role0 ? role0 === role : (si % 2 === 0) === (role === 'david'))) {
-        const adj = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [tx + dx, ty + dy]).find(([x, y]) => tileAt(L, x, y) === '.')!;
+        const sides = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [tx + dx, ty + dy]).filter(([x, y]) => tileAt(L, x, y) === '.');
+        const adj = sides.find(([x, y]) => pre.has(y * cols + x)) ?? sides[0];
         out.push({ tx: adj[0], ty: adj[1], kind: 'station', idx: si });
       }
       si++;
@@ -130,6 +144,7 @@ async function run(L: LevelDef): Promise<boolean> {
   if (!ok && process.env.VERBOSE) for (const b of [a, n]) {
     const me = b.snap?.p.find((p) => p.id === b.id);
     console.log(`   st=${JSON.stringify(b.snap?.st)} gate=${b.snap?.gate} kids=${JSON.stringify(b.snap?.e.map((e) => e.ty + ":" + e.s))}`);
+    console.log("   me", JSON.stringify(b.snap?.p.find((p) => p.id === b.id)), "ice", JSON.stringify(b.ice));
     console.log(`   ${b.role} at ${me && [tileOf(me.x), tileOf(me.y), me.x.toFixed(1), me.y.toFixed(1)]} goals`, b.goals.map((g) => `${g.kind}@${g.tx},${g.ty}`).join(' '));
   }
   const wrong = a.events.filter((e) => e.k === 'collect' && ITEM_OWNER[L.items[e.item].kind] !== 'both' &&

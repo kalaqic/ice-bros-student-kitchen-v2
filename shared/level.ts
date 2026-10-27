@@ -131,4 +131,20 @@ export function checkLevel(L: LevelDef): void {
     if (c === 'E' && !L.boss && !reach(tx, ty)) throw new Error(`${L.id}: exit unreachable`);
   }
   if (!L.boss && !L.map[0].includes('E')) throw new Error(`${L.id}: no exit in the top wall`);
+  // every task station must be reachable with the gates still CLOSED (gates open only after all tasks -> deadlock otherwise)
+  const pre = new Set<number>([L.spawns.david.ty * cols + L.spawns.david.tx]);
+  const q2: [number, number][] = [[L.spawns.david.tx, L.spawns.david.ty]];
+  while (q2.length) {
+    const [x, y] = q2.shift()!;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (pre.has(ny * cols + nx) || tileAt(L, nx, ny) !== '.') continue;
+      pre.add(ny * cols + nx); q2.push([nx, ny]);
+    }
+  }
+  if (!pre.has(L.spawns.nemanja.ty * cols + L.spawns.nemanja.tx)) throw new Error(`${L.id}: nemanja starts in a closed-off area`);
+  for (let ty = 0; ty < rows; ty++) for (let tx = 0; tx < cols; tx++) {
+    if (STATION_CODES.includes(tileAt(L, tx, ty)) && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => pre.has((ty + dy) * cols + tx + dx)))
+      throw new Error(`${L.id}: station at ${tx},${ty} can only be reached through a gate`);
+  }
 }

@@ -42,7 +42,7 @@ check(JSON.stringify(skillsFor([1, 2, 3])) === JSON.stringify(ALL), 'stage 3 don
 check(levelUnlocked('level1', []) && !levelUnlocked('menza', []), 'only level 1 is open on a fresh save');
 check(levelUnlocked('menza', ['level1']) && !levelUnlocked('boss_hrana', ['level1']), 'completing a level opens exactly the next one');
 check(JSON.stringify(completedStages(['level1', 'menza', 'boss_hrana'])) === '[1]', 'beating the stage boss completes the stage');
-check(LEVEL_ORDER.length === 15 && LEVEL_ORDER[LEVEL_ORDER.length - 1].id === 'boss_collector', '15 levels, THE COLLECTOR is last');
+check(LEVEL_ORDER.length === 27 && LEVEL_ORDER[LEVEL_ORDER.length - 1].id === 'boss_collector', '27 levels, THE COLLECTOR is last');
 
 // ================================================================ locked skills
 console.log('--- locked skills (first playthrough of stage 1)');
@@ -337,6 +337,38 @@ console.log('--- boss BRANKA');
   check(boss.dead, 'Branka is defeated at 0 HP');
   for (let i = 0; i < 30 * 5 && !done; i++) done = bs.tick();
   check(done, 'defeating the boss completes the level');
+}
+
+// ================================================================ chasing + mob collisions
+console.log('--- chase + bonk');
+{
+  const { sim, d, n } = mk('level1');
+  park(sim); ticks(sim, 5);
+  d.hp = n.hp = 99; n.x = tileCenter(1); n.y = tileCenter(11); n.ko = true; n.koUntil = 1e12;
+  const e = sim.spawnEnemy('slop_blob', 18, 1);
+  e.def = { ...e.def, abilities: [] };
+  const dist0 = Math.hypot(e.x - d.x, e.y - d.y);
+  let closest = dist0;
+  for (let k = 0; k < 30 * 30; k++) { sim.tick(); closest = Math.min(closest, Math.hypot(e.x - d.x, e.y - d.y)); }
+  check(closest < 60, `mob chases across the map to the player (${Math.round(dist0)}px -> ${Math.round(closest)}px)`);
+}
+{
+  const { sim, d, n } = mk('level1');
+  park(sim); ticks(sim, 5);
+  for (const p of [d, n]) { p.hp = 99; }
+  const [fx, fy] = firstFree(sim);
+  // player to the right; two mobs in a row walking toward each other's tile
+  d.x = tileCenter(fx + 5); d.y = tileCenter(fy); n.ko = true; n.koUntil = 1e12;
+  const a = sim.spawnEnemy('slop_blob', fx, fy), b = sim.spawnEnemy('slop_blob', fx + 1, fy);
+  for (const m of [a, b]) m.def = { ...m.def, abilities: [] };
+  b.stunUntil = 0; b.state = 0;
+  // b stands still (stunned for a moment is not allowed: make it awake but slow), a runs into it
+  b.speed = 0.0001;
+  let bonk = false;
+  for (let k = 0; k < 60 && !bonk; k++) { sim.tick(); bonk = sim.events.some((ev) => ev.k === 'bonk'); }
+  check(bonk && a.stunUntil > sim.now && b.stunUntil > sim.now, 'two mobs crashing into each other are both knocked out');
+  ticks(sim, 30 * 4);
+  check(a.stunUntil <= sim.now, 'they wake up again after a few seconds');
 }
 
 // ================================================================ solo mode

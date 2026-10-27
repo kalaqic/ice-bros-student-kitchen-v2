@@ -12,7 +12,7 @@ export type ClientMsg =
   | { t: 'input'; seq: number; dx: number; dy: number }
   | { t: 'act'; a: ActionId }
   | { t: 'answer'; i: number }
-  | { t: 'emote'; e: number }
+  | { t: 'emote'; e: number; text?: string }
   | { t: 'pause'; v: boolean }
   | { t: 'ready'; v: boolean }
   | { t: 'toLobby' }
@@ -63,7 +63,7 @@ export type GameEvent =
   | { k: 'taskStop'; idx: number; by: string }
   | { k: 'gate' }
   | { k: 'exitOpen' }
-  | { k: 'emote'; by: string; e: number }
+  | { k: 'emote'; by: string; e: number; text?: string }
   | { k: 'fail' }
   | { k: 'restart' }
   | { k: 'coffeeSpawn'; idx: number }
@@ -78,6 +78,7 @@ export type GameEvent =
   | { k: 'whistle'; i: number; x: number; y: number; r: number }
   | { k: 'throw'; i: number }
   | { k: 'eFrozen'; i: number }
+  | { k: 'bonk'; i: number; j: number }
   | { k: 'crush'; i: number; by: string }
   | { k: 'respawn'; i: number }
   | { k: 'penalty'; by: string; text: string }

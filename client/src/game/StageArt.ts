@@ -11,9 +11,11 @@ import { TASKS, TASK_BY_CODE } from '../../../shared/tasks.ts';
 
 /** cover-crop an image into a cell (used for floor / wall tiles) */
 function cover(g: CanvasRenderingContext2D, im: HTMLImageElement, x: number, y: number, w: number, h: number, alignBottom = false) {
-  const s = Math.max(w / im.width, h / im.height);
+  // the cut tiles carry a 1px transparent frame: skip it, otherwise it shows up as dark grid lines
+  const iw = im.width - 2, ih = im.height - 2;
+  const s = Math.max(w / iw, h / ih);
   const sw = w / s, sh = h / s;
-  const sx = (im.width - sw) / 2, sy = alignBottom ? im.height - sh : (im.height - sh) / 2;
+  const sx = 1 + (iw - sw) / 2, sy = 1 + (alignBottom ? ih - sh : (ih - sh) / 2);
   g.drawImage(im, sx, sy, sw, sh, x, y, w, h);
 }
 

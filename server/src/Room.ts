@@ -8,6 +8,7 @@ import { stepPlayer } from '../../shared/physics.ts';
 import type { GameEvent, PlayerSnap, ServerMsg, Snapshot } from '../../shared/protocol.ts';
 import { type Phase, type Role, otherRole, roleName } from '../../shared/types.ts';
 import { LevelSim } from './LevelSim.ts';
+import { cleanEmote } from '../../shared/emotes.ts';
 import { Player } from './Player.ts';
 
 const LOBBY_RECONNECT_MS = 20_000;
@@ -114,11 +115,12 @@ export class Room {
     this.sim.answer(p, i);
   }
 
-  onEmote(p: Player, e: number) {
+  onEmote(p: Player, e: number, text?: unknown) {
     const now = Date.now();
     if (now < p.emoteReadyAt || !Number.isInteger(e) || e < 0 || e > 5) return;
     p.emoteReadyAt = now + 700;
-    const ev: GameEvent = { k: 'emote', by: p.id, e };
+    const t = cleanEmote(text).trim();
+    const ev: GameEvent = t ? { k: 'emote', by: p.id, e, text: t } : { k: 'emote', by: p.id, e };
     if (this.phase === 'level' && this.sim) this.sim.events.push(ev); else this.lobbyEvents.push(ev);
   }
 
@@ -136,6 +138,7 @@ export class Room {
     if (cmd === 'killAll') sim.enemies.forEach((e) => { e.state = 2; e.respawnAt = Infinity; });
     if (cmd === 'nearBoss' && sim.boss) { const t = sim.boss.target(); p.x = t.x; p.y = t.y + 100; p.facing = 3; }
     if (cmd === 'stations') sim.stations.forEach((s) => { s.progress = 0.99; });
+    if (cmd === 'blind') sim.stun(p, 3000);
     if (cmd === 'bossKill' && sim.boss) (sim.boss as unknown as { damage(n: number, p?: Player): void }).damage(sim.boss.hp, p);
     if (cmd === 'toStation') {
       const st = sim.stations.find((s) => !s.done && (!s.role || s.role === p.role));

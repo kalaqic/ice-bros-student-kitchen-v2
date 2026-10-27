@@ -28,6 +28,8 @@ export interface Enemy {
   tele: { a: number; until: number; ang: number } | null;
   dashUntil: number;
   trappedMs: number; frozenAt: number; respawnAt: number;
+  /** after a mob-on-mob crash: bumping again only blocks until this time (no endless stun-lock) */
+  bonkImmuneUntil: number;
   summoned: boolean;
   // kids
   kid?: { nextAskAt: number; target: string | null; q: number; sure: boolean; satisfied: boolean; again?: string };
@@ -48,6 +50,10 @@ export interface Hazard {
 const PEACEFUL = process.env.ICEBROS_PEACEFUL === '1';
 const pick = <T>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 const QUIZ_TIMEOUT = 15000;
+/** two mobs crashing into each other are knocked out this long */
+const BONK_MS = 3500;
+/** chance a chasing mob takes a random turn instead of the shortest path (keeps them from moving as one blob) */
+const CHASE_NOISE = 0.1;
 
 export class LevelSim {
   readonly cols: number;
@@ -137,7 +143,7 @@ export class LevelSim {
       i: this.enemies.length, type: def.id, def, speed: speed ?? def.speed,
       x: tileCenter(tx), y: tileCenter(ty), tx, ty, nx: tx, ny: ty, sx: tx, sy: ty, dir, stunUntil: 0, state: 0,
       cd: def.abilities.map((a) => this.now + a.cooldownMs * (0.4 + Math.random() * 0.6)), tele: null, dashUntil: 0,
-      trappedMs: 0, frozenAt: 0, respawnAt: 0, summoned,
+      trappedMs: 0, frozenAt: 0, respawnAt: 0, summoned, bonkImmuneUntil: 0,
     };
     if (!def.hostile) e.kid = { nextAskAt: this.now + 5000 + Math.random() * 7000, target: null, q: Math.floor(Math.random() * QUESTIONS.length), sure: false, satisfied: false };
     this.enemies.push(e);
@@ -407,6 +413,7 @@ export class LevelSim {
       return false;
     }
     for (const p of this.players) this.tickPlayer(p);
+    this.buildChaseField();
     for (const e of this.enemies) this.tickEnemy(e);
     if (!PEACEFUL) this.checkHits();
     this.tickProjectiles();
@@ -534,7 +541,7 @@ export class LevelSim {
     if (e.tele) return;
     const fast = this.now < e.dashUntil;
     e.state = fast ? 6 : 0;
-    this.stepEnemyMove(e, e.speed * (fast ? 2.1 : 1), 0.4);
+    this.stepEnemyMove(e, e.speed * (fast ? 2.1 : 1), 1);
   }
 
   /** grid walker shared by enemies and kids. chase = chance to step toward the nearest player */
@@ -557,12 +564,92 @@ export class LevelSim {
       }
       return;
     }
+    // chasing mobs can run into each other: both are knocked out (lure them together!)
+    const other = e.def.hostile ? this.mobOn(e.tx + DIRS[next].x, e.ty + DIRS[next].y, e) : undefined;
+    if (other) {
+      if (this.now >= e.bonkImmuneUntil && this.now >= other.bonkImmuneUntil && other.def.hostile && (other.state === 0 || other.state === 3 || other.state === 6)) {
+        for (const m of [e, other]) {
+          m.stunUntil = Math.max(m.stunUntil, this.now + BONK_MS); m.bonkImmuneUntil = this.now + BONK_MS + 2500;
+          m.tele = null; m.dashUntil = 0; if (m.state === 3 || m.state === 6) m.state = 0;
+        }
+        e.dir = next;
+        this.events.push({ k: 'bonk', i: e.i, j: other.i });
+        return;
+      }
+      // can't crash right now: just pick another free way
+      const alt = this.wanderDir(e);
+      if (alt === null) return;
+      e.trappedMs = 0; e.dir = alt; e.nx = e.tx + DIRS[alt].x; e.ny = e.ty + DIRS[alt].y;
+      return;
+    }
     e.trappedMs = 0;
     e.dir = next;
     e.nx = e.tx + DIRS[next].x; e.ny = e.ty + DIRS[next].y;
   }
 
+  /** another live mob standing on / walking into this tile */
+  private mobOn(tx: number, ty: number, self: Enemy): Enemy | undefined {
+    return this.enemies.find((o) => o !== self && o.state !== 2 && ((o.tx === tx && o.ty === ty) || (o.nx === tx && o.ny === ty)));
+  }
+
+  /** tiles enemies can never enter (walls, furniture, gates, exit, ice, boss body) - other mobs not included */
+  private enemyWall(tx: number, ty: number): boolean {
+    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return true;
+    const c = tileAt(this.level, tx, ty);
+    return c === 'E' || c === 'G' || SOLID_STATIC.has(c) || this.ice[this.idx(tx, ty)] === 1 || !!this.boss?.blocksTile?.(tx, ty);
+  }
+
+  /** BFS distance from every reachable tile to the nearest standing player (rebuilt each tick, 20x13 grid = cheap) */
+  private chaseField: Int16Array | null = null;
+  private buildChaseField() {
+    const f = new Int16Array(this.cols * this.rows).fill(-1);
+    const q: number[] = [];
+    for (const p of this.players) {
+      if (p.ko || !p.connected) continue;
+      const i = this.idx(tileOf(p.x), tileOf(p.y));
+      if (f[i] < 0) { f[i] = 0; q.push(i); }
+    }
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h], x = i % this.cols, y = Math.floor(i / this.cols);
+      for (const d of DIRS) {
+        const nx = x + d.x, ny = y + d.y;
+        if (this.enemyWall(nx, ny)) continue;
+        const j = this.idx(nx, ny);
+        if (f[j] >= 0) continue;
+        f[j] = f[i] + 1; q.push(j);
+      }
+    }
+    this.chaseField = q.length ? f : null;
+  }
+
+  private wanderDir(e: Enemy): Dir | null {
+    const opts = ([0, 1, 2, 3] as Dir[]).filter((d) => !this.tileBlockedForEnemy(e.tx + DIRS[d].x, e.ty + DIRS[d].y, e));
+    if (!opts.length) return null;
+    const back = ((e.dir + 2) % 4) as Dir;
+    const pool = opts.length > 1 ? opts.filter((d) => d !== back) : opts;
+    return pool.includes(e.dir) && Math.random() < 0.7 ? e.dir : pick(pool);
+  }
+
   private chooseDir(e: Enemy, chase: number, forced?: Player | null): Dir | null {
+    // hostile mobs: follow the shortest path to the nearest player (through corridors, around ice)
+    if (e.def.hostile && !forced && this.chaseField && chase > 0) {
+      const f = this.chaseField;
+      const ways = ([0, 1, 2, 3] as Dir[]).filter((d) => !this.enemyWall(e.tx + DIRS[d].x, e.ty + DIRS[d].y));
+      if (!ways.length) return null;
+      const here = f[this.idx(e.tx, e.ty)];
+      if (here >= 0) {
+        if (Math.random() < CHASE_NOISE) { const w = this.wanderDir(e); if (w !== null) return w; }
+        let best: Dir | null = null, bv = Infinity;
+        for (const d of ways) {
+          const v = f[this.idx(e.tx + DIRS[d].x, e.ty + DIRS[d].y)];
+          if (v >= 0 && (v < bv || (v === bv && d === e.dir))) { bv = v; best = d; }
+        }
+        if (best !== null) return best;
+      }
+      // no path to anybody (walled in by ice): drift around; null = boxed in
+      if (ways.every((d) => this.tileBlockedForEnemy(e.tx + DIRS[d].x, e.ty + DIRS[d].y, e))) return null;
+      return this.wanderDir(e);
+    }
     const opts = ([0, 1, 2, 3] as Dir[]).filter((d) => !this.tileBlockedForEnemy(e.tx + DIRS[d].x, e.ty + DIRS[d].y, e));
     if (!opts.length) return null;
     const back = ((e.dir + 2) % 4) as Dir;

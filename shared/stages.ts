@@ -56,7 +56,7 @@ export const STAGES: StageDef[] = [
     n: 4, name: 'ZIVOT.EXE', subtitle: 'SKOLA JE BILA SAMO TUTORIJAL', reward: null, music: 'stage4', color: '#ff6a5a',
     roster: ['taxman', 'bureau', 'banker', 'landlord', 'recruiter', 'official'],
     skin: {
-      floors: ['s4_floor_0', 's4_floor_1', 's4_floor_2'], walls: ['s4_wall_0', 's4_wall_1'],
+      floors: ['s4_floor_0'], walls: ['s4_wall_0'], // one clean tile each, like the other stages
       props: { C: ['s4_desk', 's4_desk2'], T: ['s4_chairs'], H: ['s4_bookcase'], W: ['s4_cabinet'], F: ['s4_atm'], K: ['s4_cabinet'], S: ['s4_barrier'] },
       backdrop: 'bg_s4',
     },

@@ -1,5 +1,6 @@
 import { drawChar, drawFit, img, sp, spN, type ImageKey, BOSS_ANIMS, type BossAnim } from '../engine/assets.ts';
 import { bindings, keyLabel, moveLabel } from '../engine/bindings.ts';
+import { emotes } from '../engine/emotes.ts';
 import { measure, text, wrap } from '../engine/font.ts';
 import { Fx, drawStar, ease } from '../engine/fx.ts';
 import type { Overlay, Scene } from '../engine/Game.ts';
@@ -84,6 +85,8 @@ export class LevelScene implements Scene {
   private shownUnlock = false;
   private pauseMenu: PauseMenu | null = null;
   private lastQuiz = -1;
+  private nextSentAt = -9;
+  private hasNext() { const n = LEVEL_ORDER[levelIndex(this.level.id) + 1]; return !!n && levelUnlocked(n.id, this.app.session.completed); }
 
   private spriteFx(keys: ImageKey[] | string, x: number, y: number, o: { x1?: number; y1?: number; delay?: number; dur?: number; rot?: number; size?: number } = {}) {
     this.sprites.push({ keys, x, y, x1: o.x1 ?? x, y1: o.y1 ?? y, t: 0, delay: o.delay ?? 0, dur: o.dur ?? 0.3, rot: o.rot ?? 0, size: o.size ?? 64 });
@@ -315,7 +318,7 @@ export class LevelScene implements Scene {
         this.banner('IZLAZ OTVOREN!', this.app.session.solo ? 'IDI NA VRATA GORE' : 'OBOJICA NA VRATA GORE', '#7fe08a');
         a.play('exit');
         break;
-      case 'emote': { const r = roleOf(ev.by); if (r) { this.view(r).doEmote(ev.e); a.play('emote'); } break; }
+      case 'emote': { const r = roleOf(ev.by); if (r) { this.view(r).doEmote(ev.e, ev.text); a.play('emote'); } break; }
       case 'fail': this.banner(this.app.session.solo ? 'PAO SI!' : 'OBOJICA SU PALI!', 'RESTART NIVOA...', C.red); a.play('ko'); break;
       case 'restart': this.restartVisuals(); break;
       case 'coffeeSpawn': {
@@ -369,6 +372,17 @@ export class LevelScene implements Scene {
           this.fx.float(e.x, e.y - 50, 'SMRVLJEN!', C.gold, 2);
         }
         a.play('crush');
+        break;
+      }
+      case 'bonk': {
+        const e1 = this.enemyPos(ev.i), e2 = this.enemyPos(ev.j);
+        if (e1 && e2) {
+          const x = (e1.x + e2.x) / 2, y = (e1.y + e2.y) / 2 - 20;
+          this.fx.float(x, y - 30, 'BONK!', C.gold, 3);
+          this.fx.burst(x, y, 16, { shape: 'star', speed: 170, colors: ['#ffd34d', '#ffffff', '#ff9a8e'], size: 6, max: 0.7 });
+          if (spN('fx_hit')) this.spriteFx('fx_hit', x, y, { dur: 0.35, size: 70 });
+        }
+        a.play('hit'); a.play('stun');
         break;
       }
       case 'respawn': { const e = this.enemyPos(ev.i); if (e && spN('fx_summon')) this.spriteFx('fx_summon', e.x, e.y, { dur: 0.7, size: 70 }); break; }
@@ -477,6 +491,10 @@ export class LevelScene implements Scene {
     const complete = !!session.complete;
     if (complete && session.complete?.unlocked && !this.shownUnlock) { this.shownUnlock = true; game.open(new SkillUnlockedOverlay(this.app, session.complete.unlocked)); }
     const blocked = game.blocked;
+    // ENTER on the results screen = next level (same as the gold button)
+    if (complete && !blocked && inp.wasPressed('Enter', 'NumpadEnter') && this.hasNext() && this.now > this.nextSentAt + 1) {
+      this.nextSentAt = this.now; session.net.send({ t: 'next' });
+    }
     const mine = this.mySnap();
     const quizzing = !!mine && mine.qz >= 0;
     if (quizzing && this.lastQuiz < 0) this.intro = 0;
@@ -490,7 +508,7 @@ export class LevelScene implements Scene {
       if (inp.actionPressed('camera')) session.net.send({ t: 'act', a: 'camera' });
       if (inp.actionPressed('interact')) session.net.send({ t: 'act', a: 'interact' });
       if (quizzing) { for (let i = 0; i < 3; i++) if (inp.wasPressed('Digit' + (i + 1), 'Numpad' + (i + 1))) session.net.send({ t: 'answer', i }); }
-      else EMOTE_KEYS.forEach((k, i) => { if (inp.wasPressed(k)) session.net.send({ t: 'emote', e: i }); });
+      else EMOTE_KEYS.forEach((k, i) => { if (inp.wasPressed(k)) session.net.send({ t: 'emote', e: i, text: emotes.get(i) }); });
     }
 
     if (!this.snap) return;
@@ -540,6 +558,7 @@ export class LevelScene implements Scene {
     ctx.translate(OX, OY);
     ctx.drawImage(this.staticLayer, 0, 0);
     this.drawWorld(ctx);
+    this.drawBlind(ctx);
     ctx.restore();
     if (this.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${this.flash})`; ctx.fillRect(OX, OY, this.cols * TILE, this.rows * TILE); }
     this.drawHud(ctx);
@@ -734,6 +753,31 @@ export class LevelScene implements Scene {
       ctx.restore();
     }
     this.fx.draw(ctx, true);
+  }
+
+  /** blinded by a camera flash: everything goes dark except a small circle around you */
+  private blindK = 0;
+  private drawBlind(ctx: CanvasRenderingContext2D) {
+    const me = this.mySnap();
+    const v = this.app.session.me ? this.views.get(this.app.session.me.role) : undefined;
+    const want = me && me.sn > 0 && !this.app.session.complete ? Math.min(1, me.sn / 400) : 0; // fades out in the last 0.4 s
+    this.blindK += (want - this.blindK) * (want > this.blindK ? 0.5 : 0.15);
+    if (this.blindK < 0.02 || !v) return;
+    const W = this.cols * TILE, H = this.rows * TILE;
+    const cx = v.x, cy = v.y - 20, r = 62;
+    const g = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+    g.addColorStop(0, 'rgba(4,6,14,0)');
+    g.addColorStop(1, `rgba(4,6,14,${0.97 * this.blindK})`);
+    ctx.save();
+    ctx.fillStyle = `rgba(4,6,14,${0.97 * this.blindK})`;
+    ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.arc(cx, cy, r, 0, Math.PI * 2, true); ctx.fill('evenodd');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    // little white stars in the dark
+    ctx.fillStyle = `rgba(255,255,255,${0.5 * this.blindK})`;
+    for (let i = 0; i < 5; i++) { const a = this.t * 3 + i * 1.26; drawStar(ctx, cx + Math.cos(a) * 34, cy - 40 + Math.sin(a) * 8, 4, this.t * 4); }
+    ctx.restore();
+    text(ctx, 'ZASLEPLJEN!', cx, Math.max(8, cy - r - 22), { size: 2, color: `rgba(255,255,255,${this.blindK})`, outline: C.navyD }, 'center');
   }
 
   /** camera framing cone with the PERFECT / GOOD distance bands */
@@ -1163,6 +1207,7 @@ export class LevelScene implements Scene {
     const next = LEVEL_ORDER[i + 1];
     if (next && levelUnlocked(next.id, s.completed)) {
       if (ui.button(ctx, 'SLEDECI NIVO >', cx - 150, y + 284, 300, 58, { color: 'gold', size: 3 })) s.net.send({ t: 'next' });
+      text(ctx, '[ENTER]', cx + 150 + 12, y + 306, { size: 1, color: C.iceL });
       if (ui.button(ctx, 'NAZAD U LOBI', cx - 250, y + 356, 240, 46, { color: 'navy', size: 2 })) s.net.send({ t: 'toLobby' });
       if (ui.button(ctx, 'IGRAJ PONOVO', cx + 10, y + 356, 240, 46, { color: 'ice', size: 2 })) s.net.send({ t: 'retry' });
     } else {

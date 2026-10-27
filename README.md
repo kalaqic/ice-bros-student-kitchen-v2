@@ -59,12 +59,14 @@ Bilo koji Node host koji podržava WebSockets radi isto (Railway, Fly.io, VPS…
 | **F** | KAMERA: blic u konusu ispred tebe (kad se otključa) |
 | **Q** | INTERAKCIJA: počni / prekini zadatak pored stanice |
 | **ESC** | pauza (NASTAVI / PODESAVANJA / VESTINE / NAZAD U LOBI) — stvarno zaustavlja ceo nivo, i za drugog igrača (on vidi ko je pauzirao); igra stoji dok god je bilo ko u meniju |
-| **1–6** | emote; dok te dete nešto pita, **1–3** su odgovori (ili klik) |
+| **1–6** | emote (tekst menjaš u PODESAVANJA → EMOTE); dok te dete nešto pita, **1–3** su odgovori (ili klik) |
 | **R** / Enter | READY u lobiju |
+| **Enter** | na kraju nivoa: sledeći nivo |
 | **M** | brzo utišavanje svega (ako M nije dodeljen nekoj akciji) |
 
 ### Podešavanja (dugme u meniju, lobiju i ESC meniju)
 * **KONTROLE:** klikni na taster pored akcije → pritisni novi taster. Ako je taster već zauzet, pojavi se upozorenje (*"TASTER F VEC KORISTI: KAMERA"*) i promena se odbija; brojevi 1–6 su rezervisani za emote/odgovore. **RESET NA PODRAZUMEVANO** vraća WASD/SPACE/E/F/Q/ESC. Čuva se u `localStorage` (`icebros.bindings`), a sva igra čita tastere iz tog sistema (`client/src/engine/bindings.ts`).
+* **EMOTE:** klikni na jedan od 6 emota, ukucaj svoj tekst (do 22 znaka, slova bez kvačica: č/ć → C, š → S, ž → Z, đ → DJ), **Enter** = sačuvaj, **Esc** = otkaži, **RESET EMOTE** vraća podrazumevane. Čuva se u `icebros.emotes`, a drugi igrač vidi tvoj tekst.
 * **ZVUK:** klizači za muziku i efekte + UTISAJ za svaki posebno. Čuva se u `icebros.audio`. Muzika kreće tek posle prvog klika/tastera (browser ne dozvoljava autoplay).
 
 ### Muzika i zvuk pobede
@@ -99,21 +101,28 @@ Brzina zadatka = `osnovna × afinitet lika × strpljenje` (`shared/tasks.ts`):
 * **Nemanja:** slovenački 1.5×, matematika 0.85×, hemija 1.15×
 Obojica mogu da rade svaki školski zadatak; KOD je samo Davidov (laptop), ARKADA samo Nemanjina (slušalice + džojstik).
 
-## Kampanja: 4 stagea, 15 nivoa
+## Kampanja: 4 stagea, 27 nivoa
 
 Svaki nivo je označen kao **STAGE X - LEVEL Y** (u HUD-u, na uvodu, u lobiju i na kraju), a poslednji nivo stagea kao **STAGE X - BOSS**.
 
-**Stage 1 — STUDENTSKA KUHINJA** (Kuhinja · Menza · **boss STUDENTSKA HRANA**). Samo led. Slop neprijatelji: kad ih zazidaš ledom smrznu se, a kad razbiješ led pored njih — smrvljeni (vraćaju se posle 15s). Boss je ogromni slop: pljuje mast, sos koji usporava, nudle, ostavlja blato na podu i priziva slopove. Zazidaj je ledom (5+ blokova oko nje) dok se ne smrzne, pa razbij taj led → šteta. Nagrada: **KAFA**.
+**Stage 1 — STUDENTSKA KUHINJA** (Kuhinja · Menza · Skladište · Perionica sudova · Zamrzivač · **boss STUDENTSKA HRANA**). Samo led. Slop neprijatelji: kad ih zazidaš ledom smrznu se, a kad razbiješ led pored njih — smrvljeni (vraćaju se posle 15s). Boss je ogromni slop: pljuje mast, sos koji usporava, nudle, ostavlja blato na podu i priziva slopove. Zazidaj je ledom (5+ blokova oko nje) dok se ne smrzne, pa razbij taj led → šteta. Nagrada: **KAFA**.
 
-**Stage 2 — EKONOMSKA SKOLA** (Biblioteka · Učionica 12 · Arhiva · **boss SONJA KUKMAN**). Neprijatelji imaju kamere: sporiji su, ali posle crvene isprekidane linije (upozorenje) bljesnu i omame te. Sonja se pobeđuje rešavanjem ISPITA na klupama (Q), uz izbegavanje blica, tornada papira, F-ocena i bačenih testova. Nagrada: **KAMERA**. Na ponovnom igranju školski neprijatelji su "navikli na blic": omamljenje traje samo 40%, a elitni prefekt je potpuno imun.
+**Stage 2 — EKONOMSKA SKOLA** (Biblioteka · Učionica 12 · Arhiva · Zbornica · Fiskulturna sala · Kancelarija direktora · **boss SONJA KUKMAN**). Neprijatelji imaju kamere: sporiji su, ali posle crvene isprekidane linije (upozorenje) bljesnu i omame te. Sonja se pobeđuje rešavanjem ISPITA na klupama (Q), uz izbegavanje blica, tornada papira, F-ocena i bačenih testova. Nagrada: **KAMERA**. Na ponovnom igranju školski neprijatelji su "navikli na blic": omamljenje traje samo 40%, a elitni prefekt je potpuno imun.
 
-**Stage 3 — DRPD** (Hodnik · Igraonica · Učionica · **boss BRANKA**). Deca nisu neprijatelji: trče, blokiraju put i prilaze da pitaju pitanje (matematika, istorija, slovenački, hemija). Tačan odgovor → dete je srećno i više ne smeta. Pogrešan → vraća se istom igraču: *"JESI LI SIGURAN DA JE TO TACAN ODGOVOR?"*. Slikanje ili zazidavanje deteta = kazna (−1 srce). Odrasli radnici su pravi neprijatelji. Zadaci (Q) otvaraju rešetke/izlaz. Branka ostaje kao ranije (vatrene kugle, oznake na podu, udarni talas), sad sa kamerom po daljini. Nagrada: **STRPLJENJE**.
+**Stage 3 — DRPD** (Hodnik · Igraonica · Učionica · Kantina · Igralište · Biblioteka DRPD · **boss BRANKA**). Deca nisu neprijatelji: trče, blokiraju put i prilaze da pitaju pitanje (matematika, istorija, slovenački, hemija). Tačan odgovor → dete je srećno i više ne smeta. Pogrešan → vraća se istom igraču: *"JESI LI SIGURAN DA JE TO TACAN ODGOVOR?"*. Slikanje ili zazidavanje deteta = kazna (−1 srce). Odrasli radnici su pravi neprijatelji. Zadaci (Q) otvaraju rešetke/izlaz. Branka ostaje kao ranije (vatrene kugle, oznake na podu, udarni talas), sad sa kamerom po daljini. Nagrada: **STRPLJENJE**.
 
-**Stage 4 — ZIVOT.EXE** *(skola je bila tutorijal)* (Poreska uprava · Banka · Opština · **finalni boss THE COLLECTOR**). Sve veštine zajedno, protiv kombinacija:
+**Stage 4 — ZIVOT.EXE** *(skola je bila tutorijal)* (Poreska uprava · Banka · Opština · Pošta · Agencija za nekretnine · Sud · **finalni boss THE COLLECTOR**). Sve veštine zajedno, protiv kombinacija:
 * **Poreznik** baca račune · **Birokrata** zaključava nasumičnu veštinu (*"FALI VAM JEDAN PAPIR!"*) · **Bankar** baca novac koji daje **DUG** (sporiji si, cooldown duži) · **Stanodavac** baca ključeve · **Regruter** juri (dash) · **Osiguranje** baca polise koje usporavaju · **Službenik** razbija tvoj led i pišti zviždaljkom.
 * **THE COLLECTOR**: TAX / RENT / INTEREST / FEE / LATE FEE / SERVICE FEE računi, kiša novca, dug koji navodi, udarac oko sebe. Šteta samo kamerom — izdaleka 0, izbliza kritično, pa moraš rizikovati.
 
 Težina raste kroz mehanike, ne kroz HP: s1 led, s2 omamljivanje + timing, s3 prioriteti + deca + afiniteti, s4 sve odjednom.
+Poslednja tri nivoa svakog stagea (pre bossa) su teža na isti način: **isti broj neprijatelja, ali brži** (+15% / +25% / +35%), **više hrane** (15–18) i **više zadataka** (4–8 mini-igara koje otvaraju rešetku ili izlaz).
+
+**Neprijatelji jure:** svi neprijatelji stalno traže najkraći put do najbližeg igrača (kroz hodnike, oko leda); 10% vremena skrenu nasumično da ne idu kao jedna gomila. Sposobnosti (blic, bacanje, zviždaljka…) ostaju.
+**BONK!** Kad se dva neprijatelja sudare, obojica su nokautirana ~3.5 s (zvezdice). Posle toga su kratko „imuni“ na novi sudar, pa ih ne možeš zaglaviti zauvek — ali ih možeš namamiti jedne na druge.
+**Zaslepljen:** kad te pogodi blic (prefekt, Sonja…), sve se zamrači osim malog kruga oko tvog lika dok traje omamljenost.
+
+Na ekranu LEVEL COMPLETE **ENTER** = sledeći nivo.
 
 `ICEBROS_UNLOCK_ALL=1 npm start` otključava sve (za testiranje). Ako neko izgubi vezu usred nivoa, igra se pauzira do 45s; refresh/link vraća igrača na mesto.
 

@@ -1,4 +1,6 @@
 import { ACTIONS, bindings, keyLabel, type ActionKey } from '../engine/bindings.ts';
+import { emotes } from '../engine/emotes.ts';
+import { EMOTE_MAX, cleanEmote } from '../../../shared/emotes.ts';
 import { text } from '../engine/font.ts';
 import type { Overlay } from '../engine/Game.ts';
 import { C, panel, pixRect } from '../engine/ui.ts';
@@ -6,7 +8,11 @@ import type { App } from '../main.ts';
 
 /** PODESAVANJA: remappable controls + music / SFX volume. Everything persists in localStorage. */
 export class SettingsPanel implements Overlay {
-  private tab: 'controls' | 'audio' = 'controls';
+  private tab: 'controls' | 'audio' | 'emotes' = 'controls';
+  /** emote being edited + its draft text */
+  private editing = -1;
+  private draft = '';
+  private blink = 0;
   private waiting: ActionKey | null = null;
   private msg = '';
   private msgColor: string = C.iceL;
@@ -20,6 +26,18 @@ export class SettingsPanel implements Overlay {
   update(dt: number) {
     const inp = this.app.game.input;
     if (this.msgT > 0) this.msgT -= dt;
+    this.blink += dt;
+    if (this.editing >= 0) {
+      inp.capture = true;
+      for (const k of inp.typed) {
+        if (k === '\b') this.draft = this.draft.slice(0, -1);
+        else if (k === '\n') { this.commitEmote(); return; }
+        else if (k.length === 1) this.draft = cleanEmote(this.draft + k);
+      }
+      if (inp.pasted) this.draft = cleanEmote(this.draft + inp.pasted);
+      if (inp.wasPressed('Escape')) { this.editing = -1; inp.capture = false; this.flash('OTKAZANO'); }
+      return;
+    }
     if (this.waiting) {
       inp.capture = true;
       const code = inp.firstPressed;
@@ -42,7 +60,15 @@ export class SettingsPanel implements Overlay {
     if (!inp.mouse.down) this.drag = null;
   }
 
-  private close() { this.app.game.input.capture = false; this.app.game.close(this); }
+  private commitEmote() {
+    const i = this.editing;
+    emotes.set(i, this.draft);
+    this.editing = -1; this.app.game.input.capture = false;
+    this.flash(`EMOTE ${i + 1} = ${emotes.get(i)}`, C.green);
+    this.app.game.audio.play('ready');
+  }
+
+  private close() { if (this.editing >= 0) this.commitEmote(); this.app.game.input.capture = false; this.app.game.close(this); }
 
   render(ctx: CanvasRenderingContext2D) {
     const { game } = this.app;
@@ -51,10 +77,13 @@ export class SettingsPanel implements Overlay {
     const x = 300, y = 36, w = 680, h = 650;
     panel(ctx, x, y, w, h, 'navy');
     text(ctx, 'PODESAVANJA', 640, y + 22, { size: 4, color: C.gold, outline: C.navyD }, 'center');
-    if (ui.button(ctx, 'KONTROLE', x + 150, y + 70, 180, 40, { color: this.tab === 'controls' ? 'gold' : 'navy', size: 2 })) { this.tab = 'controls'; this.waiting = null; }
-    if (ui.button(ctx, 'ZVUK', x + 350, y + 70, 180, 40, { color: this.tab === 'audio' ? 'gold' : 'navy', size: 2 })) { this.tab = 'audio'; this.waiting = null; }
+    const tab = (t: SettingsPanel['tab']) => { this.tab = t; this.waiting = null; if (this.editing >= 0) this.commitEmote(); };
+    if (ui.button(ctx, 'KONTROLE', x + 70, y + 70, 170, 40, { color: this.tab === 'controls' ? 'gold' : 'navy', size: 2 })) tab('controls');
+    if (ui.button(ctx, 'ZVUK', x + 255, y + 70, 170, 40, { color: this.tab === 'audio' ? 'gold' : 'navy', size: 2 })) tab('audio');
+    if (ui.button(ctx, 'EMOTE', x + 440, y + 70, 170, 40, { color: this.tab === 'emotes' ? 'gold' : 'navy', size: 2 })) tab('emotes');
     if (this.tab === 'controls') this.renderControls(ctx, x, y + 130);
-    else this.renderAudio(ctx, x, y + 140);
+    else if (this.tab === 'audio') this.renderAudio(ctx, x, y + 140);
+    else this.renderEmotes(ctx, x, y + 140);
     if (this.msgT > 0 && this.msg) {
       ctx.globalAlpha = Math.min(1, this.msgT * 2);
       text(ctx, this.msg, 640, y + h - 92, { size: 2, color: this.msgColor, outline: C.navyD }, 'center');
@@ -107,6 +136,28 @@ export class SettingsPanel implements Overlay {
       audio.set(which === 'music' ? { musicMuted: !muted } : { sfxMuted: !muted });
       if (which === 'sfx' && muted) audio.play('collect');
     }
+  }
+
+  private renderEmotes(ctx: CanvasRenderingContext2D, x: number, y: number) {
+    const ui = this.app.game.ui;
+    text(ctx, 'KLIKNI NA EMOTE, UKUCAJ TEKST, ENTER = SACUVAJ', 640, y, { size: 1, color: C.ice }, 'center');
+    for (let i = 0; i < 6; i++) {
+      const ry = y + 24 + i * 48;
+      const editing = this.editing === i;
+      pixRect(ctx, x + 60, ry, 560, 40, editing ? '#24365e' : '#101c36', 3);
+      text(ctx, String(i + 1), x + 84, ry + 12, { size: 2, color: C.gold });
+      const label = editing ? this.draft + (Math.floor(this.blink * 2) % 2 ? '_' : ' ') : emotes.get(i);
+      if (ui.button(ctx, '', x + 110, ry + 4, 500, 32, { color: editing ? 'gold' : 'ice', size: 2, selected: editing }) && !editing) {
+        if (this.editing >= 0) this.commitEmote();
+        this.editing = i; this.draft = emotes.get(i); this.blink = 0;
+        this.flash(`MAX ${EMOTE_MAX} ZNAKOVA, ESC = OTKAZI`);
+      }
+      text(ctx, label, x + 360, ry + 12, { size: 2, color: C.ink }, 'center');
+    }
+    if (ui.button(ctx, 'RESET EMOTE', x + 190, y + 324, 300, 38, { color: 'red', size: 2 })) {
+      this.editing = -1; this.app.game.input.capture = false; emotes.reset(); this.flash('EMOTE VRACENI NA PODRAZUMEVANE', C.green);
+    }
+    text(ctx, 'TASTERI 1-6 U IGRI. DRUGI IGRAC VIDI TVOJ TEKST.', 640, y + 376, { size: 1, color: 'rgba(223,243,255,0.6)' }, 'center');
   }
 
   private renderAudio(ctx: CanvasRenderingContext2D, x: number, y: number) {

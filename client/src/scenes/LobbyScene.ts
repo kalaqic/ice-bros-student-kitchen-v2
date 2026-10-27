@@ -12,6 +12,7 @@ import { drawLobbyBg } from './common.ts';
 import { LEVEL_ORDER, levelIndex, levelLabel, levelUnlocked } from '../../../shared/levels/index.ts';
 import { stageDef } from '../../../shared/stages.ts';
 import { bindings, keyLabel, moveLabel } from '../engine/bindings.ts';
+import { emotes } from '../engine/emotes.ts';
 
 /** Playable waiting lobby on top of assets/snowy_lobby.png. */
 export class LobbyScene implements Scene {
@@ -54,7 +55,7 @@ export class LobbyScene implements Scene {
       if (!('by' in ev)) continue;
       const r = s.roleOf(ev.by);
       if (!r) continue;
-      if (ev.k === 'emote') { this.view(r).doEmote(ev.e); this.app.game.audio.play('emote'); }
+      if (ev.k === 'emote') { this.view(r).doEmote(ev.e, ev.text); this.app.game.audio.play('emote'); }
       if (ev.k === 'say') { this.view(r).speak(ev.text); this.app.game.audio.play('join'); }
     }
   }
@@ -75,7 +76,7 @@ export class LobbyScene implements Scene {
     const blocked = game.blocked;
     this.alpha = this.pred.update(dt, blocked ? { dx: 0, dy: 0 } : inp.axis(), lobbySolid);
     if (!blocked) {
-      EMOTE_KEYS.forEach((k, i) => { if (inp.wasPressed(k)) session.net.send({ t: 'emote', e: i }); });
+      EMOTE_KEYS.forEach((k, i) => { if (inp.wasPressed(k)) session.net.send({ t: 'emote', e: i, text: emotes.get(i) }); });
       if (inp.wasPressed('KeyR', 'Enter')) this.toggleReady();
       if (inp.actionPressed('pause')) this.app.settings();
     }
@@ -173,7 +174,7 @@ export class LobbyScene implements Scene {
     panel(ctx, 14, 626, 404, 82, 'dark');
     const k = (a: Parameters<typeof bindings.code>[0]) => keyLabel(bindings.code(a));
     text(ctx, `${moveLabel()}  HODAJ PO LOBIJU`, 34, 644, { size: 2, color: C.iceL });
-    text(ctx, '1-6   EMOTE: ' + EMOTES.slice(0, 3).join(' '), 34, 668, { size: 1, color: C.ice });
+    text(ctx, '1-6   EMOTE: ' + emotes.all().slice(0, 3).join(' / '), 34, 668, { size: 1, color: C.ice });
     text(ctx, `R  READY   ${keyLabel(bindings.code('pause'))}  PODESAVANJA`, 34, 686, { size: 1, color: C.ice });
     const ready = this.myReady();
     const pulse = !ready && both ? 1 + Math.sin(this.t * 6) * 0.03 : 1;
