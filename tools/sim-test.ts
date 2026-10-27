@@ -365,10 +365,39 @@ console.log('--- chase + bonk');
   // b stands still (stunned for a moment is not allowed: make it awake but slow), a runs into it
   b.speed = 0.0001;
   let bonk = false;
+  const rnd = Math.random; Math.random = () => 0.5; // no random turns in this test
   for (let k = 0; k < 60 && !bonk; k++) { sim.tick(); bonk = sim.events.some((ev) => ev.k === 'bonk'); }
+  Math.random = rnd;
   check(bonk && a.stunUntil > sim.now && b.stunUntil > sim.now, 'two mobs crashing into each other are both knocked out');
   ticks(sim, 30 * 4);
   check(a.stunUntil <= sim.now, 'they wake up again after a few seconds');
+}
+
+// ================================================================ exit door + equal food
+console.log('--- exit + food');
+{
+  const { ITEM_OWNER } = await import('../shared/items.ts');
+  const normal = LEVEL_ORDER.filter((l) => !l.boss);
+  const ok = normal.every((L) => {
+    const c = { david: 0, nemanja: 0, both: 0 } as Record<string, number>;
+    L.items.forEach((i) => c[ITEM_OWNER[i.kind]]++);
+    return c.david === 6 && c.nemanja === 6 && c.both === 2;
+  });
+  check(ok, 'every level: 6 food for David, 6 for Nemanja, 2 shared');
+  const { sim, d, n } = mk('menza');
+  park(sim); ticks(sim, 5);
+  sim.items.forEach((q) => { q.taken = true; });
+  ticks(sim, 2);
+  const ex = sim.level.map[0].indexOf('E');
+  d.x = tileCenter(ex); d.y = tileCenter(0) + 6;
+  ticks(sim, 2);
+  check(d.exited && sim.events.some((e) => e.k === 'exited') && sim.playerSnap(d).ex === 1, 'walking into the open exit -> player disappears');
+  const hp = d.hp; d.invulnUntil = 0;
+  check(!sim.hurt(d, 0, 0) && d.hp === hp, 'an exited player cannot be hurt');
+  check(!sim.completed, 'level not done until the teammate also exits');
+  n.x = tileCenter(ex + 1); n.y = tileCenter(0) + 6;
+  let done = false; for (let k = 0; k < 5 && !done; k++) done = sim.tick();
+  check(done, 'second player through the door -> level complete');
 }
 
 // ================================================================ solo mode

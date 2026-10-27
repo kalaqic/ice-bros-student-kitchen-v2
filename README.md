@@ -120,9 +120,16 @@ Poslednja tri nivoa svakog stagea (pre bossa) su teža na isti način: **isti br
 
 **Neprijatelji jure:** svi neprijatelji stalno traže najkraći put do najbližeg igrača (kroz hodnike, oko leda); 10% vremena skrenu nasumično da ne idu kao jedna gomila. Sposobnosti (blic, bacanje, zviždaljka…) ostaju.
 **BONK!** Kad se dva neprijatelja sudare, obojica su nokautirana ~3.5 s (zvezdice). Posle toga su kratko „imuni“ na novi sudar, pa ih ne možeš zaglaviti zauvek — ali ih možeš namamiti jedne na druge.
+**Mračni nivoi** (Perionica sudova, Fiskulturna sala, Igralište, Agencija za nekretnine): vidiš samo krug oko sebe, saigrač je mala svetla tačka, a otvoren izlaz svetli kroz mrak.
+**Hrana:** svaki obični nivo ima istu količinu, **6 za Davida + 6 za Nemanju + 2 zajedničke (nudle)**. Skripta `tools/balance_food.py` to sređuje za sve mape.
+**Izlaz:** kad igrač prođe kroz otvorena vrata, nestaje (ne može da bude pogođen) i čeka napolju; nivo je gotov kad izađu obojica.
 **Zaslepljen:** kad te pogodi blic (prefekt, Sonja…), sve se zamrači osim malog kruga oko tvog lika dok traje omamljenost.
 
 Na ekranu LEVEL COMPLETE **ENTER** = sledeći nivo.
+
+**Hrana je ista u svakom nivou:** 14 komada — **6 Davidovih** (2 proteina, 2 kreatina, 2 meal prepa), **6 Nemanjinih** (2 pice, 2 burgera, 2 Monstera) i **2 zajedničke nudle**. Raspoređuje se automatski (`balanceFood` u `shared/level.ts`): zadržava mesta sa mape, dopunjuje ili uklanja tako da hrana ostane raširena po celoj mapi i naizmenično je deli Davidu i Nemanji, pa obojica imaju podjednako posla svuda.
+
+**Mračni nivoi** (u lobiju piše *MRAK!*): Perionica sudova, Fiskulturna sala, Igralište i Agencija za nekretnine. Vidi se samo krug svetla oko svakog igrača; ostatak mape je u mraku. Da napraviš nivo mračnim, dodaj `dark: true` u njegovu definiciju.
 
 `ICEBROS_UNLOCK_ALL=1 npm start` otključava sve (za testiranje). Ako neko izgubi vezu usred nivoa, igra se pauzira do 45s; refresh/link vraća igrača na mesto.
 

@@ -163,7 +163,7 @@ export class LobbyScene implements Scene {
     const stg = stageDef(lv.stage);
     text(ctx, `${levelLabel(lv.id)}  (${stg.name})`, 640, 632, { size: 1, color: lv.boss ? '#ff8a7a' : stg.color }, 'center');
     text(ctx, lv.name, 640, 650, { size: lv.name.length > 11 ? 2 : 3, color: C.white, outline: C.navyD }, 'center');
-    text(ctx, lv.boss ? 'BOSS!' : lv.subtitle, 640, 680, { size: 1, color: lv.boss ? '#ff8a7a' : C.ice }, 'center');
+    text(ctx, lv.boss ? 'BOSS!' : lv.dark ? `${lv.subtitle}  -  MRAK!` : lv.subtitle, 640, 680, { size: 1, color: lv.boss ? '#ff8a7a' : C.ice }, 'center');
     if (ui.button(ctx, '<', 452, 640, 44, 44, { color: 'ice', size: 3, disabled: li <= 0 })) session.net.send({ t: 'pickLevel', id: LEVEL_ORDER[li - 1].id });
     const nextOk = li + 1 < LEVEL_ORDER.length && levelUnlocked(LEVEL_ORDER[li + 1].id, session.completed);
     if (ui.button(ctx, '>', 784, 640, 44, 44, { color: 'ice', size: 3, disabled: !nextOk })) session.net.send({ t: 'pickLevel', id: LEVEL_ORDER[li + 1].id });

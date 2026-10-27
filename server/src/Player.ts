@@ -20,6 +20,8 @@ export class Player {
   invulnUntil = 0; ko = false; koUntil = 0; reviveMs = 0; iceReadyAt = 0; collected = 0; lastDisgustAt = 0;
   // status effects
   stunUntil = 0; debtUntil = 0;
+  /** went through the open exit door: hidden and safe until the teammate follows */
+  exited = false;
   locks: Partial<Record<SkillId, number>> = {};
   /** station index being worked on (-1 none) */
   task = -1;

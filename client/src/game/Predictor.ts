@@ -55,7 +55,7 @@ export class Predictor {
   }
 
   reconcile(ps: PlayerSnap, solid: SolidFn) {
-    this.canMove = !ps.ko && !ps.dr && !(ps.sn > 0) && !(ps.qz >= 0);
+    this.canMove = !ps.ko && !ps.dr && !(ps.sn > 0) && !(ps.qz >= 0) && !ps.ex;
     this.slowed = !!ps.sl;
     this.debt = !!ps.db;
     if (!this.initialised) { this.reset(ps.x, ps.y, ps.f); return; }

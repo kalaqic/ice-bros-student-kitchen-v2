@@ -374,6 +374,16 @@ export class LevelScene implements Scene {
         a.play('crush');
         break;
       }
+      case 'exited': {
+        const p = this.posOf(ev.by);
+        if (p) {
+          this.fx.burst(p.x, p.y - 20, 18, { shape: 'star', speed: 150, colors: ['#ffd34d', '#ffffff', '#7fe08a'], size: 5, max: 0.7 });
+          this.fx.float(p.x, p.y - 60, 'IZASAO!', '#7fe08a', 2);
+        }
+        if (!this.isMe(ev.by) && !this.app.session.solo) this.banner(`${roleName(roleOf(ev.by) ?? 'david')} JE IZASAO`, 'PRATI GA KROZ VRATA!', '#7fe08a');
+        a.play('exit');
+        break;
+      }
       case 'bonk': {
         const e1 = this.enemyPos(ev.i), e2 = this.enemyPos(ev.j);
         if (e1 && e2) {
@@ -547,7 +557,7 @@ export class LevelScene implements Scene {
         this.duo = { kind: 'revive', downed: p.role, helper: helper.role, t: 0, dur: 1, frame: Math.min(3, Math.floor(p.rv * 4)) };
       }
     }
-    for (const v of this.views.values()) v.hidden = !!this.duo && !complete;
+    for (const v of this.views.values()) v.hidden = (!!this.duo && !complete) || (!complete && !!this.snap.p.find((p) => p.role === v.role)?.ex);
   }
 
   // ------------------------------------------------------------------ render
@@ -755,29 +765,61 @@ export class LevelScene implements Scene {
     this.fx.draw(ctx, true);
   }
 
-  /** blinded by a camera flash: everything goes dark except a small circle around you */
+  /**
+   * Darkness: blinded by a camera flash -> only a small circle around you;
+   * dark levels -> a circle of light around each player, everything else black.
+   */
   private blindK = 0;
+  private darkK = 0;
   private drawBlind(ctx: CanvasRenderingContext2D) {
+    const s = this.app.session;
     const me = this.mySnap();
-    const v = this.app.session.me ? this.views.get(this.app.session.me.role) : undefined;
-    const want = me && me.sn > 0 && !this.app.session.complete ? Math.min(1, me.sn / 400) : 0; // fades out in the last 0.4 s
+    const v = s.me ? this.views.get(s.me.role) : undefined;
+    const want = me && me.sn > 0 && !s.complete ? Math.min(1, me.sn / 400) : 0; // fades out in the last 0.4 s
     this.blindK += (want - this.blindK) * (want > this.blindK ? 0.5 : 0.15);
-    if (this.blindK < 0.02 || !v) return;
+    const wantDark = this.level.dark && !s.complete ? 1 : 0;
+    this.darkK += (wantDark - this.darkK) * 0.08;
+    const k = Math.max(this.blindK, this.darkK);
+    if (k < 0.02 || !v) return;
     const W = this.cols * TILE, H = this.rows * TILE;
-    const cx = v.x, cy = v.y - 20, r = 62;
-    const g = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
-    g.addColorStop(0, 'rgba(4,6,14,0)');
-    g.addColorStop(1, `rgba(4,6,14,${0.97 * this.blindK})`);
+    const lights: { x: number; y: number; r: number }[] = [];
+    // dark level: light only around YOU (after you walked out of the exit you watch your teammate instead)
+    const others = [...this.views.values()].filter((o) => o !== v && !o.hidden && s.playerByRole(o.role)?.connected);
+    if (this.blindK > 0.5) lights.push({ x: v.x, y: v.y - 20, r: 62 });
+    else if (!v.hidden) lights.push({ x: v.x, y: v.y - 20, r: 120 + (1 - this.darkK) * 400 });
+    else for (const o of others) lights.push({ x: o.x, y: o.y - 20, r: 120 + (1 - this.darkK) * 400 });
+    const alpha = this.blindK > 0.5 ? 0.97 * this.blindK : 0.95 * k;
     ctx.save();
-    ctx.fillStyle = `rgba(4,6,14,${0.97 * this.blindK})`;
-    ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.arc(cx, cy, r, 0, Math.PI * 2, true); ctx.fill('evenodd');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-    // little white stars in the dark
-    ctx.fillStyle = `rgba(255,255,255,${0.5 * this.blindK})`;
-    for (let i = 0; i < 5; i++) { const a = this.t * 3 + i * 1.26; drawStar(ctx, cx + Math.cos(a) * 34, cy - 40 + Math.sin(a) * 8, 4, this.t * 4); }
+    ctx.fillStyle = `rgba(4,6,14,${alpha})`;
+    ctx.beginPath(); ctx.rect(0, 0, W, H);
+    for (const l of lights) { ctx.moveTo(l.x + l.r, l.y); ctx.arc(l.x, l.y, l.r, 0, Math.PI * 2, true); }
+    ctx.fill('evenodd');
+    // soft edges
+    for (const l of lights) {
+      const g = ctx.createRadialGradient(l.x, l.y, l.r * 0.55, l.x, l.y, l.r);
+      g.addColorStop(0, 'rgba(4,6,14,0)'); g.addColorStop(1, `rgba(4,6,14,${alpha})`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(l.x, l.y, l.r, 0, Math.PI * 2); ctx.fill();
+    }
+    // the teammate is only a small glowing dot; an open exit glows through the dark
+    if (this.darkK > 0.5 && !v.hidden) {
+      for (const o of others) {
+        ctx.fillStyle = o.role === 'david' ? 'rgba(79,141,255,0.75)' : 'rgba(255,255,255,0.65)';
+        ctx.beginPath(); ctx.arc(o.x, o.y - 20, 5 + Math.sin(this.t * 6) * 1.5, 0, Math.PI * 2); ctx.fill();
+      }
+      if (this.exitOpen) {
+        const ex = this.level.map[0].indexOf('E');
+        ctx.fillStyle = `rgba(255,240,160,${0.3 + Math.sin(this.t * 5) * 0.12})`;
+        ctx.fillRect(ex * TILE, 0, TILE * 2, TILE);
+      }
+    }
     ctx.restore();
-    text(ctx, 'ZASLEPLJEN!', cx, Math.max(8, cy - r - 22), { size: 2, color: `rgba(255,255,255,${this.blindK})`, outline: C.navyD }, 'center');
+    if (this.blindK > 0.5) {
+      const cx = v.x, cy = v.y - 20;
+      ctx.fillStyle = `rgba(255,255,255,${0.5 * this.blindK})`;
+      for (let i = 0; i < 5; i++) { const a = this.t * 3 + i * 1.26; drawStar(ctx, cx + Math.cos(a) * 34, cy - 40 + Math.sin(a) * 8, 4, this.t * 4); }
+      text(ctx, 'ZASLEPLJEN!', cx, Math.max(8, cy - 62 - 22), { size: 2, color: `rgba(255,255,255,${this.blindK})`, outline: C.navyD }, 'center');
+    }
   }
 
   /** camera framing cone with the PERFECT / GOOD distance bands */
@@ -1104,6 +1146,7 @@ export class LevelScene implements Scene {
     let status = '', col = C.iceL;
     if (!info?.connected) { status = 'OFFLINE'; col = C.orange; }
     else if (p.ko) { status = 'KO! PRIDJI DA GA PODIGNES'; col = '#ff9a8e'; }
+    else if (p.ex) { status = 'IZASAO! CEKA TE NAPOLJU'; col = C.green; }
     else if (p.qz >= 0) { status = 'ODGOVARA DETETU'; col = C.gold; }
     else if (p.sn > 0) { status = 'OSLEPLJEN BLICEM'; col = '#ffffff'; }
     else if (p.tk) { status = 'RADI ZADATAK...'; col = '#7fe08a'; }

@@ -134,7 +134,7 @@ export class LevelSim {
     p.hp = MAX_HP; p.coffee = this.has('coffee') ? COFFEE_START : 0; p.camReadyAt = 0; p.slowUntil = 0; p.drinkUntil = 0; p.healPending = false;
     p.coffeeReadyAt = 0; p.invulnUntil = SPAWN_INVULN_MS; p.ko = false; p.koUntil = 0; p.reviveMs = 0; p.iceReadyAt = 0;
     p.collected = 0; p.lastDisgustAt = -99999; p.moving = false;
-    p.stunUntil = 0; p.debtUntil = 0; p.locks = {}; p.task = -1; p.quiz = null;
+    p.stunUntil = 0; p.debtUntil = 0; p.locks = {}; p.task = -1; p.quiz = null; p.exited = false;
   }
 
   spawnEnemy(type: string, tx: number, ty: number, speed?: number, summoned = false, dir: Dir = 0): Enemy {
@@ -170,7 +170,7 @@ export class LevelSim {
     return false;
   }
 
-  alive() { return this.players.filter((p) => !p.ko && p.connected); }
+  alive() { return this.players.filter((p) => !p.ko && p.connected && !p.exited); }
   private skillLocked(p: Player, s: SkillId) { return (p.locks[s] ?? 0) > this.now; }
   private cooldownMult(p: Player) { return this.now < p.debtUntil ? DEBT_COOLDOWN_MULT : 1; }
 
@@ -370,7 +370,7 @@ export class LevelSim {
 
   // ------------------------------------------------------------------ status effects (shared by enemies, projectiles, bosses)
   applyEffect(p: Player, effect: ProjectileEffect | 'none', dur: number, sx: number, sy: number) {
-    if (p.ko || PEACEFUL) return;
+    if (p.ko || p.exited || PEACEFUL) return;
     switch (effect) {
       case 'damage': this.hurt(p, sx, sy); break;
       case 'slow': if (this.now >= p.invulnUntil) { p.slowUntil = Math.max(p.slowUntil, this.now + dur); this.events.push({ k: 'slowed', by: p.id }); } break;
@@ -380,7 +380,7 @@ export class LevelSim {
     }
   }
   stun(p: Player, ms: number) {
-    if (p.ko || PEACEFUL) return;
+    if (p.ko || p.exited || PEACEFUL) return;
     p.stunUntil = Math.max(p.stunUntil, this.now + ms);
     this.stopTask(p);
     this.events.push({ k: 'stun', by: p.id, ms });
@@ -437,7 +437,7 @@ export class LevelSim {
     const taken = this.items.filter((i) => i.taken).length;
     const tasksOk = !this.tasksGateExit || this.stations.every((s) => s.done);
     if (!this.exitOpen && taken === this.items.length && tasksOk) { this.exitOpen = true; this.events.push({ k: 'exitOpen' }); }
-    if (this.exitOpen && this.players.length === this.need && this.players.every((p) => !p.ko && tileOf(p.y) === 0)) {
+    if (this.exitOpen && this.players.length === this.need && this.players.every((p) => p.exited)) {
       this.completed = true;
       this.stats.timeMs = this.now;
       return true;
@@ -450,6 +450,11 @@ export class LevelSim {
   }
 
   private tickPlayer(p: Player) {
+    if (p.exited) { // already out: just acknowledge inputs
+      const last = p.inputs.pop(); if (last) p.ack = last.seq;
+      p.inputs = []; p.moving = false;
+      return;
+    }
     // movement from queued inputs (validated deltas, never client coordinates)
     const canMove = !p.ko && this.now >= p.drinkUntil && this.now >= p.stunUntil && !p.quiz;
     let processed = 0;
@@ -462,6 +467,12 @@ export class LevelSim {
       processed++;
     }
     if (p.moving && p.task >= 0) this.stopTask(p);
+    // through the open exit door -> disappear until the teammate follows
+    if (this.exitOpen && !p.ko && !this.level.boss && tileOf(p.y) === 0 && this.level.map[0][tileOf(p.x)] === 'E') {
+      p.exited = true; p.moving = false; p.quiz = null; this.stopTask(p);
+      this.events.push({ k: 'exited', by: p.id });
+      return;
+    }
     if (p.healPending && this.now >= p.drinkUntil) {
       p.healPending = false;
       p.hp = Math.min(MAX_HP, p.hp + 1);
@@ -469,7 +480,7 @@ export class LevelSim {
     }
     if (p.quiz && this.now >= p.quiz.until) this.resolveQuiz(p, false);
     if (p.ko) {
-      const mate = this.players.find((q) => q !== p && !q.ko && q.connected);
+      const mate = this.players.find((q) => q !== p && !q.ko && q.connected && !q.exited);
       const reviveMs = REVIVE_MS * (this.has('patience') ? PATIENCE_REVIVE_MULT : 1);
       if (mate && Math.hypot(mate.x - p.x, mate.y - p.y) < REVIVE_RANGE) {
         p.reviveMs += DT * 1000;
@@ -512,7 +523,7 @@ export class LevelSim {
   private nearest(e: Enemy, maxD: number): Player | null {
     let best: Player | null = null, bd = maxD;
     for (const p of this.players) {
-      if (p.ko || !p.connected) continue;
+      if (p.ko || !p.connected || p.exited) continue;
       const d = Math.hypot(p.x - e.x, p.y - e.y);
       if (d < bd) { bd = d; best = p; }
     }
@@ -605,7 +616,7 @@ export class LevelSim {
     const f = new Int16Array(this.cols * this.rows).fill(-1);
     const q: number[] = [];
     for (const p of this.players) {
-      if (p.ko || !p.connected) continue;
+      if (p.ko || !p.connected || p.exited) continue;
       const i = this.idx(tileOf(p.x), tileOf(p.y));
       if (f[i] < 0) { f[i] = 0; q.push(i); }
     }
@@ -766,7 +777,7 @@ export class LevelSim {
       return;
     }
     if (!k.target && this.now >= k.nextAskAt) {
-      const cand = this.players.filter((p) => !p.ko && p.connected && !p.quiz);
+      const cand = this.players.filter((p) => !p.ko && p.connected && !p.quiz && !p.exited);
       const again = cand.find((p) => p.id === k.again);
       if (again) k.target = again.id;
       else if (cand.length) {
@@ -794,7 +805,7 @@ export class LevelSim {
 
   private checkHits() {
     for (const p of this.players) {
-      if (p.ko || this.now < p.invulnUntil) continue;
+      if (p.ko || p.exited || this.now < p.invulnUntil) continue;
       for (const e of this.enemies) {
         if (!e.def.touchDamage || e.state === 1 || e.state === 2 || this.now < e.stunUntil) continue;
         const d = Math.hypot(e.x - p.x, e.y - (p.y - 12));
@@ -808,7 +819,7 @@ export class LevelSim {
 
   /** One heart of damage with knockback away from (sx, sy). Used by enemies, projectiles and bosses. */
   hurt(p: Player, sx: number, sy: number, enemy = -1, force = false): boolean {
-    if (p.ko || this.now < p.invulnUntil || (PEACEFUL && !force)) return false;
+    if (p.ko || p.exited || this.now < p.invulnUntil || (PEACEFUL && !force)) return false;
     p.hp--; p.invulnUntil = this.now + INVULN_MS;
     this.stats.perPlayer[p.role].hits++;
     p.drinkUntil = Math.min(p.drinkUntil, this.now); // a hit interrupts sipping
@@ -854,7 +865,7 @@ export class LevelSim {
       else if (!gone && c !== '.' && c !== 'X' && c !== 'G' && c !== 'E' && SOLID_STATIC.has(c)) gone = true;
       else if (!gone && c === '#') gone = true;
       if (!gone) for (const p of this.players) {
-        if (!p.ko && Math.hypot(p.x - f.x, p.y - 12 - f.y) < f.r + 6) {
+        if (!p.ko && !p.exited && Math.hypot(p.x - f.x, p.y - 12 - f.y) < f.r + 6) {
           this.applyEffect(p, f.effect, f.dur, f.x - f.vx * 0.1, f.y - f.vy * 0.1);
           gone = true; break;
         }
@@ -926,7 +937,7 @@ export class LevelSim {
       sn: Math.max(0, Math.round(p.stunUntil - this.now)), db: this.now < p.debtUntil ? 1 : 0,
       lk: (Object.keys(p.locks) as SkillId[]).filter((s) => (p.locks[s] ?? 0) > this.now),
       tk: p.task >= 0 ? TASKS[this.stations[p.task].task].anim : '', ti: p.task,
-      qz: p.quiz ? p.quiz.q : -1, qs: p.quiz?.sure ? 1 : 0,
+      qz: p.quiz ? p.quiz.q : -1, qs: p.quiz?.sure ? 1 : 0, ex: p.exited ? 1 : 0,
     };
   }
   enemySnaps(): EnemySnap[] {

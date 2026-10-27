@@ -39,6 +39,8 @@ export interface PlayerSnap {
   tk: TaskAnim | ''; ti: number;
   /** kid question being answered (-1 none) and "are you sure?" retry flag */
   qz: number; qs: 0 | 1;
+  /** 1 = already through the exit door (hidden, waiting for the teammate) */
+  ex?: 0 | 1;
 }
 /** s: 0 normal, 1 ice-frozen, 2 gone (crushed / defeated), 3 telegraphing an attack, 4 kid asking, 5 kid happy, 6 dashing */
 export interface EnemySnap { i: number; ty: string; x: number; y: number; d: Dir; st: number /* stun ms left */; s: number }
@@ -79,6 +81,7 @@ export type GameEvent =
   | { k: 'throw'; i: number }
   | { k: 'eFrozen'; i: number }
   | { k: 'bonk'; i: number; j: number }
+  | { k: 'exited'; by: string }
   | { k: 'crush'; i: number; by: string }
   | { k: 'respawn'; i: number }
   | { k: 'penalty'; by: string; text: string }
